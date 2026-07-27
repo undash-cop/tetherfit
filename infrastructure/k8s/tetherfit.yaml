@@ -1,0 +1,131 @@
+# API Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tetherfit-api
+  labels:
+    app: tetherfit-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tetherfit-api
+  template:
+    metadata:
+      labels:
+        app: tetherfit-api
+    spec:
+      initContainers:
+        - name: migrate
+          image: tetherfit-api:latest
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - secretRef:
+                name: tetherfit-secrets
+      containers:
+        - name: api
+          image: tetherfit-api:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: tetherfit-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tetherfit-api
+spec:
+  selector:
+    app: tetherfit-api
+  ports:
+    - port: 80
+      targetPort: 8000
+---
+# Web Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tetherfit-web
+  labels:
+    app: tetherfit-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tetherfit-web
+  template:
+    metadata:
+      labels:
+        app: tetherfit-web
+    spec:
+      containers:
+        - name: web
+          image: tetherfit-web:latest
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tetherfit-web
+spec:
+  selector:
+    app: tetherfit-web
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# Celery worker + beat
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tetherfit-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tetherfit-worker
+  template:
+    metadata:
+      labels:
+        app: tetherfit-worker
+    spec:
+      containers:
+        - name: worker
+          image: tetherfit-api:latest
+          command:
+            ["celery", "-A", "app.infrastructure.celery_app.celery_app", "worker", "-B", "-l", "info"]
+          envFrom:
+            - secretRef:
+                name: tetherfit-secrets

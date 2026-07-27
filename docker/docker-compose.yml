@@ -1,0 +1,38 @@
+services:
+  api:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../.env
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.tetherfit-api.rule=Host(`api.tetherfit.localhost`)"
+
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+        VITE_KEYCLOAK_URL: ${VITE_KEYCLOAK_URL}
+        VITE_KEYCLOAK_REALM: ${VITE_KEYCLOAK_REALM}
+        VITE_KEYCLOAK_CLIENT_ID: ${VITE_KEYCLOAK_CLIENT_ID}
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.tetherfit-web.rule=Host(`tetherfit.localhost`)"
+
+# External Undash-Cop services (not started here):
+# - PostgreSQL  → DATABASE_URL
+# - Redis       → REDIS_URL / CELERY_* 
+# - Keycloak    → KEYCLOAK_* / VITE_KEYCLOAK_*
+# - Cloudflare R2 → R2_*

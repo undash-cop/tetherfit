@@ -1,0 +1,60 @@
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.cover
+apps/api/.venv/
+apps/api/*.egg-info/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+.turbo/
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+playwright-report/
+test-results/
+
+# PWA
+dev-dist/
+
+# Docker
+docker-data/
+
+# Secrets
+*.pem
+*.key
+credentials.json
