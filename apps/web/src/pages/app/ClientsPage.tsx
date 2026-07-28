@@ -83,10 +83,6 @@ export function ClientsPage() {
                   <p className="uppercase tracking-wide opacity-70">Sessions done</p>
                   <p className="font-semibold text-forest dark:text-sand">
                     {client.sessions_completed ?? 0}
-                    <span className="font-normal opacity-70">
-                      {" "}
-                      · {client.remaining_credits ?? 0} left
-                    </span>
                   </p>
                 </div>
               </div>

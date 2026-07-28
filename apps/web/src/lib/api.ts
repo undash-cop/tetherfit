@@ -112,7 +112,6 @@ export type Client = {
   pt_end_at?: string | null;
   created_at: string;
   updated_at: string;
-  remaining_credits: number | null;
   joined_on?: string | null;
   sessions_completed?: number;
   amount_paid_paise?: number;
@@ -162,11 +161,5 @@ export type Dashboard = {
   today_sessions: PtSession[];
   upcoming_sessions: PtSession[];
   recent_clients: Client[];
-  low_credit_clients: {
-    client_id: string;
-    client_name: string;
-    remaining_sessions: number;
-  }[];
-  total_remaining_credits: number;
   generated_at: string;
 };

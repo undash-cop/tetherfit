@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.domain.models import Client, PtSession, SessionStatus
-from app.features.packages.services import PackageService
 from app.features.sessions.schemas import (
     FinishSessionBody,
     SessionCreate,
@@ -20,7 +19,6 @@ from app.features.sessions.schemas import (
 class SessionService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
-        self.packages = PackageService(db)
 
     def _to_out(self, session: PtSession) -> SessionOut:
         out = SessionOut.model_validate(session)
@@ -209,11 +207,6 @@ class SessionService:
                 session.notes = body.notes
             if body.rating is not None:
                 session.rating = body.rating
-        if not session.credit_deducted:
-            pkg = await self.packages.deduct_one(organization_id, session.client_id)
-            if pkg:
-                session.package_id = pkg.id
-                session.credit_deducted = True
         await self.db.flush()
         return await self.get(organization_id, session_id)
 

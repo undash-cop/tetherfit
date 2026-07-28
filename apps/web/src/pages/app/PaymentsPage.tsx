@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Badge, Input, Label } from "@/components/ui/field";
 import { useClients } from "@/hooks/useClients";
 import { useMe } from "@/hooks/useMe";
-import { useDashboard } from "@/hooks/useSessions";
 import { apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth/keycloak";
 
@@ -54,7 +53,6 @@ async function openGstInvoice(invoiceId: string) {
 }
 
 export function PaymentsPage() {
-  const dash = useDashboard();
   const me = useMe();
   const clients = useClients();
   const qc = useQueryClient();
@@ -111,7 +109,6 @@ export function PaymentsPage() {
       setQrInvoiceId(null);
       void qc.invalidateQueries({ queryKey: ["payments"] });
       void qc.invalidateQueries({ queryKey: ["invoices"] });
-      void qc.invalidateQueries({ queryKey: ["dashboard"] });
       void qc.invalidateQueries({ queryKey: ["clients"] });
     },
   });
@@ -128,7 +125,6 @@ export function PaymentsPage() {
       setQrInvoiceId(null);
       void qc.invalidateQueries({ queryKey: ["payments"] });
       void qc.invalidateQueries({ queryKey: ["invoices"] });
-      void qc.invalidateQueries({ queryKey: ["dashboard"] });
       void qc.invalidateQueries({ queryKey: ["clients"] });
     },
   });
@@ -147,10 +143,8 @@ export function PaymentsPage() {
       <h1 className="font-display text-3xl font-bold text-forest dark:text-lime">Payments</h1>
 
       <div className="rounded-3xl bg-forest p-5 text-sand dark:bg-moss">
-        <p className="text-sm text-sand/70">Session credits remaining</p>
-        <p className="font-display text-4xl font-bold text-lime">
-          {dash.data?.total_remaining_credits ?? 0}
-        </p>
+        <p className="text-sm text-sand/70">Collect with QR or cash · GST invoices</p>
+        <p className="font-display text-2xl font-bold text-lime">Payments</p>
         {gstPct > 0 && (
           <p className="mt-2 text-xs text-sand/70">Default GST {gstPct}% applied on new invoices</p>
         )}
@@ -269,16 +263,6 @@ export function PaymentsPage() {
             <Badge>
               {p.method || p.provider} · {p.status}
             </Badge>
-          </li>
-        ))}
-      </ul>
-
-      <h2 className="font-display text-xl font-bold">Low credit clients</h2>
-      <ul className="space-y-2">
-        {(dash.data?.low_credit_clients ?? []).map((c) => (
-          <li key={c.client_id} className="flex justify-between text-sm">
-            <span>{c.client_name}</span>
-            <Badge>{c.remaining_sessions} left</Badge>
           </li>
         ))}
       </ul>

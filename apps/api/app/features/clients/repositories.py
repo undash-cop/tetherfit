@@ -4,14 +4,7 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models import (
-    Client,
-    Invoice,
-    InvoiceStatus,
-    PtSession,
-    SessionPackage,
-    SessionStatus,
-)
+from app.domain.models import Client, Invoice, InvoiceStatus, PtSession, SessionStatus
 
 
 class ClientRepository:
@@ -73,17 +66,6 @@ class ClientRepository:
     async def soft_delete(self, client: Client) -> None:
         client.deleted_at = datetime.now(UTC)
         await self.db.flush()
-
-    async def remaining_credits(self, organization_id: UUID, client_id: UUID) -> int:
-        total = await self.db.scalar(
-            select(func.coalesce(func.sum(SessionPackage.remaining_sessions), 0)).where(
-                SessionPackage.organization_id == organization_id,
-                SessionPackage.client_id == client_id,
-                SessionPackage.deleted_at.is_(None),
-                SessionPackage.remaining_sessions > 0,
-            )
-        )
-        return int(total or 0)
 
     async def sessions_completed(self, organization_id: UUID, client_id: UUID) -> int:
         total = await self.db.scalar(

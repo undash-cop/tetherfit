@@ -120,7 +120,7 @@ export function DashboardPage() {
               >
                 <span className="font-medium">{c.full_name}</span>
                 <span className="text-sm text-slate dark:text-sand/60">
-                  {c.remaining_credits ?? 0} left
+                  {c.sessions_completed ?? 0} done
                 </span>
               </Link>
             </li>

@@ -86,9 +86,6 @@ export function SessionDetailPage() {
             {s.start_accuracy_m != null ? ` (±${Math.round(s.start_accuracy_m)}m)` : ""}
           </p>
         )}
-        {s.credit_deducted && (
-          <p className="mt-2 text-xs font-semibold text-moss dark:text-lime">Credit deducted</p>
-        )}
       </div>
 
       {!closed && (

@@ -8,7 +8,7 @@ import { getToken } from "@/lib/auth/keycloak";
 type Home = {
   full_name: string;
   organization_name: string;
-  remaining_credits: number;
+  sessions_completed: number;
   upcoming_sessions: number;
   active_workouts: number;
 };
@@ -31,7 +31,7 @@ export function ClientHomePage() {
         </h1>
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <Stat label="Credits" value={home.data.remaining_credits} />
+        <Stat label="Completed" value={home.data.sessions_completed} />
         <Stat label="Upcoming" value={home.data.upcoming_sessions} />
         <Stat label="Workouts" value={home.data.active_workouts} />
       </div>

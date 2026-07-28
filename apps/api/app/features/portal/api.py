@@ -25,7 +25,7 @@ from app.domain.models import (
     MealPlan,
     Organization,
     PtSession,
-    SessionPackage,
+    SessionStatus,
     User,
     WorkoutAssignment,
     WorkoutPlan,
@@ -53,7 +53,7 @@ class PortalHomeOut(BaseModel):
     client_id: UUID
     full_name: str
     organization_name: str
-    remaining_credits: int
+    sessions_completed: int
     upcoming_sessions: int
     active_workouts: int
 
@@ -148,10 +148,13 @@ async def portal_home(
 ) -> PortalHomeOut:
     client = await _linked_client(db, principal.user)
     org = await db.get(Organization, client.organization_id)
-    credits = await db.scalar(
-        select(func.coalesce(func.sum(SessionPackage.remaining_sessions), 0)).where(
-            SessionPackage.client_id == client.id,
-            SessionPackage.deleted_at.is_(None),
+    completed = await db.scalar(
+        select(func.count())
+        .select_from(PtSession)
+        .where(
+            PtSession.client_id == client.id,
+            PtSession.deleted_at.is_(None),
+            PtSession.status == SessionStatus.COMPLETED,
         )
     )
     upcoming = await db.scalar(
@@ -176,7 +179,7 @@ async def portal_home(
         client_id=client.id,
         full_name=client.full_name,
         organization_name=org.name if org else "Coach",
-        remaining_credits=int(credits or 0),
+        sessions_completed=int(completed or 0),
         upcoming_sessions=int(upcoming or 0),
         active_workouts=int(workouts or 0),
     )

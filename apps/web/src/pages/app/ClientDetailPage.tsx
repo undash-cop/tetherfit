@@ -6,8 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Badge, Input, Label } from "@/components/ui/field";
 import {
   useClient,
-  useClientPackages,
-  useCreatePackage,
   useUpdateClient,
 } from "@/hooks/useClients";
 import { useCancelSession, useClientSessions } from "@/hooks/useSessions";
@@ -57,13 +55,10 @@ export function ClientDetailPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const client = useClient(id);
-  const packages = useClientPackages(id);
   const history = useClientSessions(id);
-  const createPkg = useCreatePackage(id!);
   const updateClient = useUpdateClient(id!);
   const cancelSession = useCancelSession();
   const qc = useQueryClient();
-  const [sessions, setSessions] = useState(10);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [weight, setWeight] = useState(70);
   const [height, setHeight] = useState(170);
@@ -74,9 +69,7 @@ export function ClientDetailPage() {
   const [invoiceAmount, setInvoiceAmount] = useState(5000);
   const [ptStart, setPtStart] = useState("");
   const [ptEnd, setPtEnd] = useState("");
-  const [tab, setTab] = useState<
-    "overview" | "credits" | "sessions" | "assessments" | "notes"
-  >("overview");
+  const [tab, setTab] = useState<"overview" | "sessions" | "assessments" | "notes">("overview");
   const [focusPanel, setFocusPanel] = useState<"schedule" | "invoice" | null>(null);
 
   useEffect(() => {
@@ -237,15 +230,15 @@ export function ClientDetailPage() {
         </h1>
         <div className="mt-2 flex flex-wrap gap-2">
           <Badge>{c.status}</Badge>
-          <Badge className="bg-moss/15 text-moss dark:bg-lime/15 dark:text-lime">
-            {c.remaining_credits ?? 0} credits
-          </Badge>
           <Badge>{c.sessions_completed ?? 0} completed</Badge>
+          <Badge className="bg-moss/15 text-moss dark:bg-lime/15 dark:text-lime">
+            {formatMoney(c.amount_paid_paise ?? 0)} paid
+          </Badge>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(["overview", "credits", "sessions", "assessments", "notes"] as const).map((t) => (
+        {(["overview", "sessions", "assessments", "notes"] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -402,40 +395,6 @@ export function ClientDetailPage() {
               Go to chat
             </Button>
           </Link>
-        </div>
-      )}
-
-      {tab === "credits" && (
-        <div className="space-y-4">
-          <ul className="space-y-2">
-            {(packages.data ?? []).map((p) => (
-              <li
-                key={p.id}
-                className="rounded-2xl border border-forest/10 bg-white/70 px-4 py-3 dark:border-sand/10 dark:bg-white/5"
-              >
-                <p className="font-semibold">
-                  {p.remaining_sessions} / {p.total_sessions} remaining
-                </p>
-              </li>
-            ))}
-          </ul>
-          <div className="rounded-2xl border border-dashed border-forest/20 p-4 dark:border-sand/20">
-            <Label htmlFor="pack">Grant package (sessions)</Label>
-            <Input
-              id="pack"
-              type="number"
-              min={1}
-              value={sessions}
-              onChange={(e) => setSessions(Number(e.target.value))}
-            />
-            <Button
-              className="mt-3 w-full"
-              disabled={createPkg.isPending}
-              onClick={() => createPkg.mutate({ total_sessions: sessions, notes: "Manual pack" })}
-            >
-              Add credits
-            </Button>
-          </div>
         </div>
       )}
 

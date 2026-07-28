@@ -57,7 +57,6 @@ class ClientOut(BaseModel):
     pt_end_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
-    remaining_credits: int | None = None
     joined_on: datetime | None = None
     sessions_completed: int = 0
     amount_paid_paise: int = 0

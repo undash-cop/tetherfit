@@ -15,7 +15,6 @@ class ClientService:
     async def _enrich(self, organization_id: UUID, client) -> ClientOut:
         out = ClientOut.model_validate(client)
         out.joined_on = client.created_at
-        out.remaining_credits = await self.repo.remaining_credits(organization_id, client.id)
         out.sessions_completed = await self.repo.sessions_completed(organization_id, client.id)
         out.amount_paid_paise = await self.repo.amount_paid_paise(organization_id, client.id)
         return out
