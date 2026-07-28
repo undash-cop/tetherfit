@@ -26,7 +26,7 @@ export function SchedulingPage() {
   const clients = useClients("");
   const [clientId, setClientId] = useState("");
   const [starts, setStarts] = useState("");
-  const [weekday, setWeekday] = useState(0);
+  const [weekdays, setWeekdays] = useState<number[]>([0]);
 
   const rules = useQuery({
     queryKey: ["recurrence-rules"],
@@ -45,7 +45,7 @@ export function SchedulingPage() {
         body: JSON.stringify({
           client_id: clientId,
           frequency: "weekly",
-          byweekday: [weekday],
+          byweekday: [...weekdays].sort((a, b) => a - b),
           starts_on: new Date(starts).toISOString(),
           duration_minutes: 60,
           generate_weeks: 8,
@@ -56,6 +56,12 @@ export function SchedulingPage() {
       void qc.invalidateQueries({ queryKey: ["calendar"] });
     },
   });
+
+  function toggleWeekday(day: number) {
+    setWeekdays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
+    );
+  }
 
   const saveAvailability = useMutation({
     mutationFn: () =>
@@ -99,25 +105,29 @@ export function SchedulingPage() {
         </select>
         <Label>First session</Label>
         <Input type="datetime-local" value={starts} onChange={(e) => setStarts(e.target.value)} />
-        <Label>Weekday</Label>
+        <Label>Weekdays</Label>
         <div className="flex flex-wrap gap-2">
-          {days.map((d, i) => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => setWeekday(i)}
-              className={`min-h-10 rounded-xl px-3 text-sm font-semibold ${
-                weekday === i
-                  ? "bg-forest text-sand dark:bg-lime dark:text-ink"
-                  : "bg-white/70 dark:bg-white/5"
-              }`}
-            >
-              {d}
-            </button>
-          ))}
+          {days.map((d, i) => {
+            const selected = weekdays.includes(i);
+            return (
+              <button
+                key={d}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => toggleWeekday(i)}
+                className={`min-h-10 rounded-xl px-3 text-sm font-semibold ${
+                  selected
+                    ? "bg-forest text-sand dark:bg-lime dark:text-ink"
+                    : "bg-white/70 dark:bg-white/5"
+                }`}
+              >
+                {d}
+              </button>
+            );
+          })}
         </div>
         <Button
-          disabled={!clientId || !starts || createRule.isPending}
+          disabled={!clientId || !starts || weekdays.length === 0 || createRule.isPending}
           onClick={() => createRule.mutate()}
         >
           Generate 8 weeks
@@ -127,7 +137,8 @@ export function SchedulingPage() {
       <ul className="space-y-2">
         {(rules.data ?? []).map((r) => (
           <li key={r.id} className="rounded-xl border border-forest/10 px-3 py-2 text-sm dark:border-sand/10">
-            {r.frequency} · weekday {(r.byweekday ?? []).join(",")} ·{" "}
+            {r.frequency} ·{" "}
+            {(r.byweekday ?? []).map((d) => days[d] ?? d).join(", ") || "—"} ·{" "}
             {r.active ? "active" : "off"}
             {r.sessions_created != null ? ` · +${r.sessions_created}` : ""}
           </li>

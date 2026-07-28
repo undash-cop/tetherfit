@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Badge, Input, Label } from "@/components/ui/field";
+import { Badge, Input, Label, Textarea } from "@/components/ui/field";
 import { useClients } from "@/hooks/useClients";
 import { useMe } from "@/hooks/useMe";
 import { apiFetch } from "@/lib/api";
@@ -58,6 +58,12 @@ export function PaymentsPage() {
 
   const [clientId, setClientId] = useState("");
   const [amount, setAmount] = useState(5000);
+  const [discount, setDiscount] = useState(0);
+  const [taxInclusive, setTaxInclusive] = useState(false);
+  const [ptDuration, setPtDuration] = useState("");
+  const [terms, setTerms] = useState(
+    "Payment due within 7 days\nSessions are non-refundable once consumed\nPlease carry this invoice for GST records",
+  );
   const [qr, setQr] = useState<UpiQr | null>(null);
   const [qrInvoiceId, setQrInvoiceId] = useState<string | null>(null);
 
@@ -70,8 +76,21 @@ export function PaymentsPage() {
         token: getToken(),
         body: JSON.stringify({
           client_id: clientId,
-          line_items: [{ description: "Training package", quantity: 1, unit_paise: amount * 100 }],
+          line_items: [
+            {
+              description: ptDuration.trim() ? `Training package (${ptDuration.trim()})` : "Training package",
+              quantity: 1,
+              unit_paise: amount * 100,
+            },
+          ],
+          discount_paise: discount * 100,
           apply_default_gst: true,
+          tax_inclusive: taxInclusive,
+          pt_duration: ptDuration.trim() || null,
+          terms_and_conditions: terms
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean),
         }),
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["invoices"] }),
@@ -165,8 +184,36 @@ export function PaymentsPage() {
           value={amount}
           onChange={(e) => setAmount(Number(e.target.value))}
         />
+        <Label>Discount (INR)</Label>
+        <Input
+          type="number"
+          min={0}
+          value={discount}
+          onChange={(e) => setDiscount(Math.max(0, Number(e.target.value) || 0))}
+        />
+        <Label>PT duration</Label>
+        <Input
+          placeholder="e.g. 8 weeks (24 sessions)"
+          value={ptDuration}
+          onChange={(e) => setPtDuration(e.target.value)}
+        />
+        <Label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={taxInclusive}
+            onChange={(e) => setTaxInclusive(e.target.checked)}
+          />
+          Amount is tax inclusive
+        </Label>
+        <Label>Terms &amp; Conditions (one line per item)</Label>
+        <Textarea
+          rows={4}
+          value={terms}
+          onChange={(e) => setTerms(e.target.value)}
+          placeholder="Add one condition per line"
+        />
         <Button
-          disabled={!clientId || createInvoice.isPending}
+          disabled={!clientId || createInvoice.isPending || amount <= 0 || discount >= amount}
           onClick={() => createInvoice.mutate()}
         >
           Create invoice

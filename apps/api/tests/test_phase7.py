@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.features.billing.api import _compute_tax_paise
+from app.features.billing.api import _compute_tax_paise, _split_inclusive_tax_paise
 from app.features.clients.schemas import ClientCreate, ClientUpdate, compute_pt_validity
 from app.features.sessions.schemas import StartSessionBody
 
@@ -25,6 +25,12 @@ def test_compute_tax_from_default_gst():
     assert (
         _compute_tax_paise(10_000, tax_paise=None, apply_default_gst=False, default_gst_pct=18) == 0
     )
+
+
+def test_split_inclusive_tax_from_gross_amount():
+    taxable, tax = _split_inclusive_tax_paise(11_800, 18)
+    assert taxable == 10_000
+    assert tax == 1_800
 
 
 def test_pt_validity_states():

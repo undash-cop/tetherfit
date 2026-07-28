@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
-import { Badge, Input, Label } from "@/components/ui/field";
+import { Badge, Input, Label, Textarea } from "@/components/ui/field";
 import { useClient, useUpdateClient } from "@/hooks/useClients";
 import { useCancelSession, useClientSessions } from "@/hooks/useSessions";
 import { apiFetch } from "@/lib/api";
@@ -96,9 +96,15 @@ export function ClientDetailPage() {
   const [height, setHeight] = useState(170);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [scheduleStarts, setScheduleStarts] = useState("");
-  const [scheduleWeekday, setScheduleWeekday] = useState(0);
+  const [scheduleWeekdays, setScheduleWeekdays] = useState<number[]>([0]);
   const [scheduleDuration, setScheduleDuration] = useState(60);
   const [invoiceAmount, setInvoiceAmount] = useState(5000);
+  const [invoiceDiscount, setInvoiceDiscount] = useState(0);
+  const [invoiceTaxInclusive, setInvoiceTaxInclusive] = useState(false);
+  const [invoicePtDuration, setInvoicePtDuration] = useState("");
+  const [invoiceTerms, setInvoiceTerms] = useState(
+    "Payment due within 7 days\nSessions are non-refundable once consumed\nPlease carry this invoice for GST records",
+  );
   const [ptStart, setPtStart] = useState("");
   const [ptEnd, setPtEnd] = useState("");
   const [lastInvoiceId, setLastInvoiceId] = useState<string | null>(null);
@@ -155,7 +161,7 @@ export function ClientDetailPage() {
         body: JSON.stringify({
           client_id: id,
           frequency: "weekly",
-          byweekday: [scheduleWeekday],
+          byweekday: [...scheduleWeekdays].sort((a, b) => a - b),
           starts_on: new Date(scheduleStarts).toISOString(),
           duration_minutes: scheduleDuration,
           generate_weeks: 8,
@@ -168,6 +174,12 @@ export function ClientDetailPage() {
     },
   });
 
+  function toggleScheduleWeekday(day: number) {
+    setScheduleWeekdays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
+    );
+  }
+
   const createInvoice = useMutation({
     mutationFn: () =>
       apiFetch<Invoice>("/api/v1/invoices", {
@@ -176,9 +188,22 @@ export function ClientDetailPage() {
         body: JSON.stringify({
           client_id: id,
           line_items: [
-            { description: "Personal training", quantity: 1, unit_paise: invoiceAmount * 100 },
+            {
+              description: invoicePtDuration.trim()
+                ? `Personal training (${invoicePtDuration.trim()})`
+                : "Personal training",
+              quantity: 1,
+              unit_paise: invoiceAmount * 100,
+            },
           ],
+          discount_paise: invoiceDiscount * 100,
           apply_default_gst: true,
+          tax_inclusive: invoiceTaxInclusive,
+          pt_duration: invoicePtDuration.trim() || null,
+          terms_and_conditions: invoiceTerms
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean),
         }),
       }),
     onSuccess: (inv) => {
@@ -408,7 +433,7 @@ export function ClientDetailPage() {
           >
             <h2 className="font-display text-lg font-bold">Schedule series</h2>
             <p className="text-xs text-slate dark:text-sand/60">
-              Frequency (weekday) + duration → generate upcoming classes.
+              Pick one or more weekdays + duration → generate upcoming classes.
             </p>
             <Label>First session</Label>
             <Input
@@ -423,26 +448,32 @@ export function ClientDetailPage() {
               value={scheduleDuration}
               onChange={(e) => setScheduleDuration(Number(e.target.value))}
             />
-            <Label>Weekday</Label>
+            <Label>Weekdays</Label>
             <div className="flex flex-wrap gap-2">
-              {days.map((d, i) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setScheduleWeekday(i)}
-                  className={`min-h-10 rounded-xl px-3 text-sm font-semibold ${
-                    scheduleWeekday === i
-                      ? "bg-forest text-sand dark:bg-lime dark:text-ink"
-                      : "bg-white/70 dark:bg-white/5"
-                  }`}
-                >
-                  {d}
-                </button>
-              ))}
+              {days.map((d, i) => {
+                const selected = scheduleWeekdays.includes(i);
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => toggleScheduleWeekday(i)}
+                    className={`min-h-10 rounded-xl px-3 text-sm font-semibold ${
+                      selected
+                        ? "bg-forest text-sand dark:bg-lime dark:text-ink"
+                        : "bg-white/70 dark:bg-white/5"
+                    }`}
+                  >
+                    {d}
+                  </button>
+                );
+              })}
             </div>
             <Button
               className="w-full"
-              disabled={!scheduleStarts || scheduleSeries.isPending}
+              disabled={
+                !scheduleStarts || scheduleWeekdays.length === 0 || scheduleSeries.isPending
+              }
               onClick={() => scheduleSeries.mutate()}
             >
               Schedule weekly series
@@ -468,9 +499,39 @@ export function ClientDetailPage() {
               value={invoiceAmount}
               onChange={(e) => setInvoiceAmount(Number(e.target.value))}
             />
+            <Label>Discount (INR)</Label>
+            <Input
+              type="number"
+              min={0}
+              value={invoiceDiscount}
+              onChange={(e) => setInvoiceDiscount(Math.max(0, Number(e.target.value) || 0))}
+            />
+            <Label>PT duration</Label>
+            <Input
+              placeholder="e.g. 12 weeks (36 sessions)"
+              value={invoicePtDuration}
+              onChange={(e) => setInvoicePtDuration(e.target.value)}
+            />
+            <Label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={invoiceTaxInclusive}
+                onChange={(e) => setInvoiceTaxInclusive(e.target.checked)}
+              />
+              Amount is tax inclusive
+            </Label>
+            <Label>Terms &amp; Conditions (one line per item)</Label>
+            <Textarea
+              rows={4}
+              value={invoiceTerms}
+              onChange={(e) => setInvoiceTerms(e.target.value)}
+              placeholder="Add one condition per line"
+            />
             <Button
               className="w-full"
-              disabled={createInvoice.isPending || invoiceAmount <= 0}
+              disabled={
+                createInvoice.isPending || invoiceAmount <= 0 || invoiceDiscount >= invoiceAmount
+              }
               onClick={() => createInvoice.mutate()}
             >
               {createInvoice.isPending ? "Creating…" : "Create GST invoice"}

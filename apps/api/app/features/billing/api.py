@@ -1,5 +1,6 @@
 import html
 import json
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import UTC, datetime
 from urllib.parse import quote, urlencode
 from uuid import UUID, uuid4
@@ -24,6 +25,7 @@ class LineItem(BaseModel):
     description: str
     quantity: int = 1
     unit_paise: int = Field(ge=0)
+    meta: dict | None = None
 
 
 class InvoiceCreate(BaseModel):
@@ -32,6 +34,9 @@ class InvoiceCreate(BaseModel):
     tax_paise: int | None = None
     discount_paise: int = Field(default=0, ge=0)
     apply_default_gst: bool = True
+    tax_inclusive: bool = False
+    pt_duration: str | None = None
+    terms_and_conditions: list[str] = Field(default_factory=list)
     notes: str | None = None
     due_at: datetime | None = None
 
@@ -115,6 +120,16 @@ def _compute_tax_paise(
     return 0
 
 
+def _split_inclusive_tax_paise(gross: int, gst_pct: float) -> tuple[int, int]:
+    """Split a GST-inclusive gross into taxable base and tax (both in paise)."""
+    if gross <= 0 or gst_pct <= 0:
+        return gross, 0
+    ratio = Decimal("100") / (Decimal("100") + Decimal(str(gst_pct)))
+    taxable = int((Decimal(gross) * ratio).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    taxable = min(gross, max(0, taxable))
+    return taxable, gross - taxable
+
+
 def _build_upi_uri(*, vpa: str, amount_paise: int, note: str) -> str:
     rupees = f"{amount_paise / 100:.2f}"
     params = urlencode(
@@ -165,17 +180,38 @@ async def create_invoice(
     org = await db.scalar(select(Organization).where(Organization.id == oid))
     subtotal = sum(i.quantity * i.unit_paise for i in body.line_items)
     discount = min(body.discount_paise, subtotal)
-    taxable = max(0, subtotal - discount)
-    tax = _compute_tax_paise(
-        taxable,
-        tax_paise=body.tax_paise,
-        apply_default_gst=body.apply_default_gst,
-        default_gst_pct=float(org.default_gst_pct if org else 0),
-    )
+    gross_after_discount = max(0, subtotal - discount)
+    default_gst_pct = float(org.default_gst_pct if org else 0)
+    if body.tax_inclusive:
+        if body.tax_paise is not None:
+            tax = min(max(0, body.tax_paise), gross_after_discount)
+            taxable = gross_after_discount - tax
+        else:
+            taxable, tax = _split_inclusive_tax_paise(gross_after_discount, default_gst_pct)
+        total = gross_after_discount
+    else:
+        taxable = gross_after_discount
+        tax = _compute_tax_paise(
+            taxable,
+            tax_paise=body.tax_paise,
+            apply_default_gst=body.apply_default_gst,
+            default_gst_pct=default_gst_pct,
+        )
+        total = taxable + tax
     count = await db.scalar(
         select(func.count()).select_from(Invoice).where(Invoice.organization_id == oid)
     )
     number = f"TF-{(count or 0) + 1:05d}"
+    line_items = [i.model_dump() for i in body.line_items]
+    if line_items:
+        existing_meta = line_items[0].get("meta") or {}
+        terms = [t.strip() for t in body.terms_and_conditions if t and t.strip()]
+        line_items[0]["meta"] = {
+            **existing_meta,
+            "tax_inclusive": body.tax_inclusive,
+            "pt_duration": body.pt_duration,
+            "terms_and_conditions": terms,
+        }
     row = Invoice(
         organization_id=oid,
         client_id=body.client_id,
@@ -184,8 +220,8 @@ async def create_invoice(
         subtotal_paise=subtotal,
         discount_paise=discount,
         tax_paise=tax,
-        total_paise=taxable + tax,
-        line_items=[i.model_dump() for i in body.line_items],
+        total_paise=total,
+        line_items=line_items,
         notes=body.notes,
         due_at=body.due_at,
         created_by=principal.user.id,
@@ -273,6 +309,13 @@ async def gst_invoice_html(
     gst_pct = 0.0
     if taxable > 0 and invoice.tax_paise > 0:
         gst_pct = round((invoice.tax_paise / taxable) * 100, 2)
+    line_meta = {}
+    if invoice.line_items:
+        first = invoice.line_items[0] or {}
+        line_meta = first.get("meta") or {}
+    tax_inclusive = bool(line_meta.get("tax_inclusive"))
+    pt_duration = str(line_meta.get("pt_duration") or "").strip()
+    terms = [str(t).strip() for t in (line_meta.get("terms_and_conditions") or []) if str(t).strip()]
     cgst = invoice.tax_paise // 2
     sgst = invoice.tax_paise - cgst
     org_name = html.escape(org.name if org else "TetherFit")
@@ -288,32 +331,85 @@ async def gst_invoice_html(
     client_email = (
         f"<br/>{html.escape(client.email)}" if client and client.email else ""
     )
+    pt_duration_html = (
+        f"<p><strong>PT Duration:</strong> {html.escape(pt_duration)}</p>" if pt_duration else ""
+    )
+    tax_mode_label = "Inclusive" if tax_inclusive else "Exclusive"
+    terms_html = "".join(f"<li>{html.escape(term)}</li>" for term in terms)
+    if not terms_html:
+        terms_html = (
+            "<li>Payments are due as per invoice schedule unless otherwise agreed in writing.</li>"
+            "<li>Services once delivered are non-refundable except where required by law.</li>"
+            "<li>Please retain this invoice for accounting and GST record purposes.</li>"
+        )
     body = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"/><title>GST Invoice {inv_num}</title>
 <style>
-body{{font-family:Georgia,serif;margin:2rem;color:#14231b;}}
-h1{{font-size:1.6rem;margin:0}}
-.muted{{color:#5b6b63}}
-table{{width:100%;border-collapse:collapse;margin-top:1.5rem}}
-th,td{{border-bottom:1px solid #d7e0da;padding:.55rem;text-align:left}}
-.totals{{margin-top:1rem;text-align:right}}
-@media print{{button{{display:none}}}}
+body{{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;background:#f3f7f4;color:#13231b;}}
+.sheet{{max-width:920px;margin:2rem auto;background:#fff;border:1px solid #dbe5de;border-radius:14px;padding:2rem 2rem 1.5rem;box-shadow:0 10px 30px rgba(18,35,27,.08)}}
+.header{{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}}
+h1{{font-size:1.5rem;margin:0 0 .25rem 0;letter-spacing:.01em}}
+.muted{{color:#5e6e65;font-size:.92rem}}
+.pill{{display:inline-block;background:#eaf3ee;color:#214132;border-radius:999px;padding:.2rem .65rem;font-size:.75rem;font-weight:600;letter-spacing:.02em}}
+.grid{{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem}}
+.card{{border:1px solid #dbe5de;border-radius:10px;padding:.9rem}}
+.card h3{{margin:0 0 .4rem 0;font-size:.84rem;text-transform:uppercase;letter-spacing:.05em;color:#446053}}
+table{{width:100%;border-collapse:collapse;margin-top:1.25rem}}
+th{{background:#f4f8f5;color:#355246;border:1px solid #dbe5de;padding:.6rem;text-align:left;font-size:.82rem}}
+td{{border:1px solid #e3ebe5;padding:.58rem;text-align:left;font-size:.92rem}}
+.num{{text-align:right;white-space:nowrap}}
+.totals{{margin-top:1rem;margin-left:auto;width:340px}}
+.totals-row{{display:flex;justify-content:space-between;padding:.25rem 0;border-bottom:1px dashed #dbe5de}}
+.totals-row.total{{font-size:1.08rem;font-weight:700;border-bottom:0;padding-top:.55rem}}
+.tc{{margin-top:1.3rem;border-top:1px solid #dbe5de;padding-top:.85rem}}
+.tc ul{{margin:.45rem 0 0 1rem;padding:0}}
+.tc li{{margin:.22rem 0;line-height:1.35}}
+.footer{{margin-top:1rem;font-size:.8rem;color:#6b7b72}}
+button{{margin-bottom:1rem;border:0;background:#183426;color:#fff;padding:.5rem .8rem;border-radius:.5rem;cursor:pointer}}
+@media print{{body{{background:#fff}} .sheet{{margin:0;border:0;box-shadow:none;border-radius:0;padding:0}} button{{display:none}}}}
 </style></head><body>
+<div class="sheet">
 <button onclick="window.print()">Print / Save PDF</button>
-<h1>{org_name}</h1>
-<p class="muted">Tax Invoice · {inv_num} · {created}</p>
-<p>{gstin_line}{addr_line}{phone_line}</p>
-<p><strong>Bill to:</strong> {client_name}<br/>{client_phone}{client_email}</p>
-<table><thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>
+<div class="header">
+  <div>
+    <span class="pill">TAX INVOICE</span>
+    <h1>{org_name}</h1>
+    <p class="muted">{gstin_line}{addr_line}{phone_line}</p>
+  </div>
+  <div class="card">
+    <h3>Invoice Details</h3>
+    <p><strong>No:</strong> {inv_num}</p>
+    <p><strong>Date:</strong> {created}</p>
+    <p><strong>Status:</strong> {html.escape(invoice.status)}</p>
+    <p><strong>Tax Mode:</strong> {tax_mode_label}</p>
+  </div>
+</div>
+<div class="grid">
+  <div class="card">
+    <h3>Bill To</h3>
+    <p><strong>{client_name}</strong><br/>{client_phone}{client_email}</p>
+  </div>
+  <div class="card">
+    <h3>Service Summary</h3>
+    {pt_duration_html}
+    <p><strong>Notes:</strong> {html.escape(invoice.notes or "—")}</p>
+  </div>
+</div>
+<table><thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
 <tbody>{lines}</tbody></table>
 <div class="totals">
-<p>Subtotal: ₹{invoice.subtotal_paise / 100:.2f}</p>
-<p>Discount: ₹{invoice.discount_paise / 100:.2f}</p>
-<p>Taxable: ₹{taxable / 100:.2f}</p>
-<p>CGST ({gst_pct / 2:.2f}%): ₹{cgst / 100:.2f}</p>
-<p>SGST ({gst_pct / 2:.2f}%): ₹{sgst / 100:.2f}</p>
-<p><strong>Total: ₹{invoice.total_paise / 100:.2f}</strong></p>
-<p class="muted">Status: {html.escape(invoice.status)}</p>
+  <div class="totals-row"><span>Subtotal</span><span>₹{invoice.subtotal_paise / 100:.2f}</span></div>
+  <div class="totals-row"><span>Discount</span><span>- ₹{invoice.discount_paise / 100:.2f}</span></div>
+  <div class="totals-row"><span>Taxable Value</span><span>₹{taxable / 100:.2f}</span></div>
+  <div class="totals-row"><span>CGST ({gst_pct / 2:.2f}%)</span><span>₹{cgst / 100:.2f}</span></div>
+  <div class="totals-row"><span>SGST ({gst_pct / 2:.2f}%)</span><span>₹{sgst / 100:.2f}</span></div>
+  <div class="totals-row total"><span>Total (INR)</span><span>₹{invoice.total_paise / 100:.2f}</span></div>
+</div>
+<div class="tc">
+  <h3>Terms &amp; Conditions</h3>
+  <ul>{terms_html}</ul>
+</div>
+<p class="footer">This is a system-generated invoice from TetherFit and does not require a physical signature.</p>
 </div>
 </body></html>"""
     return HTMLResponse(content=body)
