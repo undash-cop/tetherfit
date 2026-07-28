@@ -1,6 +1,8 @@
 import { Navigate, Outlet, useLocation } from "react-router";
 
 import { useMe } from "@/hooks/useMe";
+import { ApiError } from "@/lib/api";
+import { logout } from "@/lib/auth/keycloak";
 import { useAuthStore } from "@/stores/auth";
 
 export function RequireAuth() {
@@ -30,12 +32,38 @@ export function RequireAuth() {
   }
 
   if (me.isError) {
+    const err = me.error;
+    const status = err instanceof ApiError ? err.status : null;
+    const detail =
+      err instanceof ApiError && err.body && typeof err.body === "object" && "detail" in err.body
+        ? String((err.body as { detail: unknown }).detail)
+        : err instanceof Error
+          ? err.message
+          : "Unknown error";
+
+    const isAuth = status === 401 || status === 403;
+
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-fog px-5 dark:bg-ink">
-        <p className="font-display text-xl text-forest dark:text-lime">Could not reach API</p>
-        <p className="text-center text-sm text-slate dark:text-sand/70">
-          Check VITE_API_URL and that the API is running with a valid Keycloak token.
+        <p className="font-display text-xl text-forest dark:text-lime">
+          {isAuth ? "API rejected your login token" : "Could not reach API"}
         </p>
+        <p className="max-w-lg text-center text-sm text-slate dark:text-sand/70">
+          {isAuth
+            ? "Keycloak realm/issuer on the API must match the SPA. On the VPS set UDC_JWT_ISSUER and KEYCLOAK_REALM to tetherfit, then redeploy."
+            : "Check VITE_API_URL, CORS_ORIGINS (include this site), and that the API is up."}
+        </p>
+        <p className="max-w-lg break-all text-center font-mono text-xs text-slate/80 dark:text-sand/50">
+          {status ? `HTTP ${status}: ` : ""}
+          {detail}
+        </p>
+        <button
+          type="button"
+          className="mt-2 rounded-xl bg-forest px-4 py-2 text-sm font-semibold text-sand dark:bg-lime dark:text-ink"
+          onClick={() => void logout()}
+        >
+          Sign out and try again
+        </button>
       </div>
     );
   }

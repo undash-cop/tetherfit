@@ -32,19 +32,27 @@ Client: `tetherfit-web` (public, PKCE S256) in realm `tetherfit`.
 
 Login lands on `/app` after Keycloak (not `/auth/callback`).
 
-## API CORS (UDC)
+## API CORS + JWT (UDC)
 
-In `configs/env/apps.tetherfit.env` on the VPS, include Netlify origins:
+In `configs/env/apps.tetherfit.env` on the VPS, realm/issuer **must match** the SPA:
 
 ```env
+UDC_JWT_ISSUER=https://secure.undash-cop.com/realms/tetherfit
+KEYCLOAK_REALM=tetherfit
+KEYCLOAK_CLIENT_ID=tetherfit-web
+KEYCLOAK_AUDIENCE=tetherfit-api
 CORS_ORIGINS=https://<your-netlify-or-custom-domain>,http://localhost:5173
 ```
 
-Then restart/redeploy the API:
+`KEYCLOAK_SERVER_URL=http://keycloak:8080` stays in `global.env` (internal JWKS).
+
+Then redeploy:
 
 ```bash
 ./scripts/deploy-apps.sh --only tetherfit
 ```
+
+If the UI shows **API rejected your login token** / HTTP 401, the issuer/realm mismatch above is the usual cause.
 
 ## Local verify before deploy
 
