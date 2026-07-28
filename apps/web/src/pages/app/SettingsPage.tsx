@@ -16,7 +16,7 @@ const schema = z.object({
   business_address: z.string().optional(),
   business_phone: z.string().optional(),
   upi_vpa: z.string().optional(),
-  default_gst_pct: z.coerce.number().min(0).max(100),
+  default_gst_pct: z.number().min(0).max(100),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -131,7 +131,7 @@ export function SettingsPage() {
             id="default_gst_pct"
             type="number"
             step="0.01"
-            {...form.register("default_gst_pct")}
+            {...form.register("default_gst_pct", { valueAsNumber: true })}
           />
         </div>
         <Button type="submit" className="w-full" disabled={mutation.isPending}>
