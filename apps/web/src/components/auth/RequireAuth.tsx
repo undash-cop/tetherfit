@@ -1,15 +1,46 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 
 import { useMe } from "@/hooks/useMe";
 import { ApiError } from "@/lib/api";
-import { logout } from "@/lib/auth/keycloak";
+import { ensureFreshToken, login, logout } from "@/lib/auth/keycloak";
 import { useAuthStore } from "@/stores/auth";
 
 export function RequireAuth() {
   const ready = useAuthStore((s) => s.ready);
   const authenticated = useAuthStore((s) => s.authenticated);
+  const setAuthenticated = useAuthStore((s) => s.setAuthenticated);
   const location = useLocation();
+  const qc = useQueryClient();
   const me = useMe(ready && authenticated);
+  const recoveryAttempted = useRef(false);
+  const [recovering, setRecovering] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
+
+  // Idle tabs often refetch /me with an expired access token. Refresh once, then refetch.
+  useEffect(() => {
+    if (!me.isError || recoveryAttempted.current || recovering) return;
+    const err = me.error;
+    const status = err instanceof ApiError ? err.status : null;
+    if (status !== 401 && status !== 403) return;
+
+    recoveryAttempted.current = true;
+    setRecovering(true);
+    void (async () => {
+      try {
+        const token = await ensureFreshToken(-1);
+        if (!token) {
+          setAuthenticated(false);
+          setSessionExpired(true);
+          return;
+        }
+        await qc.refetchQueries({ queryKey: ["me"] });
+      } finally {
+        setRecovering(false);
+      }
+    })();
+  }, [me.isError, me.error, recovering, qc, setAuthenticated]);
 
   if (!ready) {
     return (
@@ -19,14 +50,16 @@ export function RequireAuth() {
     );
   }
 
-  if (!authenticated) {
-    return <Navigate to="/login" replace />;
+  if (!authenticated || sessionExpired) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
-  if (me.isLoading) {
+  if (me.isLoading || recovering) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-fog dark:bg-ink">
-        <p className="font-display text-xl text-forest dark:text-lime">Loading profile…</p>
+        <p className="font-display text-xl text-forest dark:text-lime">
+          {recovering ? "Refreshing session…" : "Loading profile…"}
+        </p>
       </div>
     );
   }
@@ -42,16 +75,23 @@ export function RequireAuth() {
           : "Unknown error";
 
     const isAuth = status === 401 || status === 403;
+    const looksExpired = isAuth && /invalid|expired|token/i.test(detail);
 
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-fog px-5 dark:bg-ink">
         <p className="font-display text-xl text-forest dark:text-lime">
-          {isAuth ? "API rejected your login token" : "Could not reach API"}
+          {looksExpired
+            ? "Session expired"
+            : isAuth
+              ? "API rejected your login token"
+              : "Could not reach API"}
         </p>
         <p className="max-w-lg text-center text-sm text-slate dark:text-sand/70">
-          {isAuth
-            ? "Keycloak realm/issuer on the API must match the SPA. On the VPS set UDC_JWT_ISSUER and KEYCLOAK_REALM to tetherfit, then redeploy."
-            : "Check VITE_API_URL, CORS_ORIGINS (include this site), and that the API is up."}
+          {looksExpired
+            ? "You were signed out after being idle. Sign in again to continue."
+            : isAuth
+              ? "Keycloak realm/issuer on the API must match the SPA. On the VPS set UDC_JWT_ISSUER and KEYCLOAK_REALM to tetherfit, then redeploy."
+              : "Check VITE_API_URL, CORS_ORIGINS (include this site), and that the API is up."}
         </p>
         <p className="max-w-lg break-all text-center font-mono text-xs text-slate/80 dark:text-sand/50">
           {status ? `HTTP ${status}: ` : ""}
@@ -60,9 +100,15 @@ export function RequireAuth() {
         <button
           type="button"
           className="mt-2 rounded-xl bg-forest px-4 py-2 text-sm font-semibold text-sand dark:bg-lime dark:text-ink"
-          onClick={() => void logout()}
+          onClick={() => {
+            if (looksExpired) {
+              void login(location.pathname || "/app");
+              return;
+            }
+            void logout();
+          }}
         >
-          Sign out and try again
+          {looksExpired ? "Sign in again" : "Sign out and try again"}
         </button>
       </div>
     );

@@ -1,4 +1,4 @@
-import { getToken } from "@/lib/auth/keycloak";
+import { ensureFreshToken } from "@/lib/auth/keycloak";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 
@@ -16,8 +16,9 @@ export async function openGstInvoice(invoiceId: string): Promise<void> {
   win.document.write("<p style='font-family:sans-serif;padding:1.5rem'>Loading GST invoice…</p>");
 
   try {
+    const token = await ensureFreshToken(60);
     const res = await fetch(`${API_URL}/api/v1/invoices/${invoiceId}/gst-invoice`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
+      headers: { Authorization: `Bearer ${token}` },
     });
     const body = await res.text();
     if (!res.ok) {

@@ -1,3 +1,4 @@
+import { ensureFreshToken, keycloak } from "@/lib/auth/keycloak";
 import { cacheJson, enqueueMutation, readCachedJson } from "@/lib/offline";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
@@ -21,17 +22,43 @@ export async function apiFetch<T>(
   const method = (rest.method || "GET").toUpperCase();
   const cacheKey = `api:${method}:${path}`;
 
+  // Refresh before every authenticated call so idle tabs don't hit the API with an expired JWT.
+  let bearer = token;
+  if (token !== null && keycloak?.authenticated) {
+    bearer = (await ensureFreshToken(60)) ?? token;
+  }
+
   try {
     const response = await fetch(`${API_URL}${path}`, {
       ...rest,
       headers: {
         "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
         ...headers,
       },
     });
 
     if (!response.ok) {
+      // One retry after forced refresh — covers race where token expired mid-flight.
+      if (response.status === 401 && keycloak?.authenticated) {
+        const refreshed = await ensureFreshToken(-1);
+        if (refreshed && refreshed !== bearer) {
+          const retry = await fetch(`${API_URL}${path}`, {
+            ...rest,
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${refreshed}`,
+              ...headers,
+            },
+          });
+          if (retry.ok) {
+            if (retry.status === 204) return undefined as T;
+            const data = (await retry.json()) as T;
+            if (method === "GET") cacheJson(cacheKey, data);
+            return data;
+          }
+        }
+      }
       let body: unknown = null;
       try {
         body = await response.json();

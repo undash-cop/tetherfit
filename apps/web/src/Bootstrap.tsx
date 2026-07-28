@@ -1,7 +1,12 @@
 import { useEffect } from "react";
 
 import { AppRouter } from "@/App";
-import { initKeycloak, keycloak, keycloakConfigured } from "@/lib/auth/keycloak";
+import {
+  initKeycloak,
+  keycloak,
+  keycloakConfigured,
+  setupTokenLifecycle,
+} from "@/lib/auth/keycloak";
 import { useAuthStore } from "@/stores/auth";
 
 export function Bootstrap() {
@@ -24,6 +29,9 @@ export function Bootstrap() {
         const authed = await initKeycloak();
         if (!cancelled) {
           setAuthenticated(Boolean(authed && keycloak?.authenticated));
+          setupTokenLifecycle(() => {
+            if (!cancelled) setAuthenticated(false);
+          });
         }
       } catch {
         if (!cancelled) setAuthenticated(false);

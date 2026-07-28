@@ -16,6 +16,7 @@ export const keycloak =
     : null;
 
 let initPromise: Promise<boolean> | null = null;
+let refreshInFlight: Promise<string | undefined> | null = null;
 
 export async function initKeycloak(): Promise<boolean> {
   if (!keycloak) {
@@ -37,6 +38,50 @@ export async function initKeycloak(): Promise<boolean> {
       });
   }
   return initPromise;
+}
+
+/** Refresh the access token if it expires within `minValidity` seconds. */
+export async function ensureFreshToken(minValidity = 60): Promise<string | undefined> {
+  if (!keycloak?.authenticated) {
+    return keycloak?.token;
+  }
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+  refreshInFlight = (async () => {
+    try {
+      await keycloak!.updateToken(minValidity);
+      return keycloak!.token;
+    } catch {
+      // Refresh token expired / session gone — leave authenticated flag for callers to handle.
+      return keycloak?.token;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+
+/** Keep tokens alive while the tab is open (covers idle → focus without waiting for an API call). */
+export function setupTokenLifecycle(onAuthLost?: () => void) {
+  if (!keycloak) return;
+
+  keycloak.onTokenExpired = () => {
+    void ensureFreshToken(30).then((token) => {
+      if (!token) onAuthLost?.();
+    });
+  };
+
+  keycloak.onAuthRefreshError = () => {
+    onAuthLost?.();
+  };
+
+  const onVisible = () => {
+    if (document.visibilityState === "visible" && keycloak?.authenticated) {
+      void ensureFreshToken(60);
+    }
+  };
+  document.addEventListener("visibilitychange", onVisible);
 }
 
 export async function login(redirectPath = "/app") {
