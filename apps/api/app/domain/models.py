@@ -18,6 +18,10 @@ class Organization(UUIDPrimaryKeyMixin, TimestampMixin, AuditMixin, Base):
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)
     branding_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     gstin: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    business_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    business_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    upi_vpa: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    default_gst_pct: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     plan: Mapped[str] = mapped_column(String(32), default="solo", nullable=False)
     subscription_status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
     working_hours: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
@@ -86,6 +90,8 @@ class Client(UUIDPrimaryKeyMixin, TimestampMixin, AuditMixin, Base):
     avatar: Mapped[str | None] = mapped_column(String(512), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     date_of_birth: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    pt_start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    pt_end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     linked_user_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -196,6 +202,9 @@ class PtSession(UUIDPrimaryKeyMixin, TimestampMixin, AuditMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    start_latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    start_longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    start_accuracy_m: Mapped[float | None] = mapped_column(Float, nullable=True)
     rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
     package_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),

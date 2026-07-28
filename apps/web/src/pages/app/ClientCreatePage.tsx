@@ -13,6 +13,8 @@ const schema = z.object({
   phone: z.string().optional(),
   goals: z.string().optional(),
   notes: z.string().optional(),
+  pt_start_at: z.string().optional(),
+  pt_end_at: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -22,7 +24,15 @@ export function ClientCreatePage() {
   const create = useCreateClient();
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { full_name: "", email: "", phone: "", goals: "", notes: "" },
+    defaultValues: {
+      full_name: "",
+      email: "",
+      phone: "",
+      goals: "",
+      notes: "",
+      pt_start_at: "",
+      pt_end_at: "",
+    },
   });
 
   return (
@@ -37,6 +47,10 @@ export function ClientCreatePage() {
             phone: values.phone || null,
             goals: values.goals || null,
             notes: values.notes || null,
+            pt_start_at: values.pt_start_at
+              ? new Date(values.pt_start_at).toISOString()
+              : null,
+            pt_end_at: values.pt_end_at ? new Date(values.pt_end_at).toISOString() : null,
           });
           void navigate(`/app/clients/${client.id}`);
         })}
@@ -52,6 +66,14 @@ export function ClientCreatePage() {
         <div>
           <Label htmlFor="email">Email</Label>
           <Input id="email" type="email" {...form.register("email")} />
+        </div>
+        <div>
+          <Label htmlFor="pt_start_at">PT start</Label>
+          <Input id="pt_start_at" type="date" {...form.register("pt_start_at")} />
+        </div>
+        <div>
+          <Label htmlFor="pt_end_at">PT end</Label>
+          <Input id="pt_end_at" type="date" {...form.register("pt_end_at")} />
         </div>
         <div>
           <Label htmlFor="goals">Goals</Label>

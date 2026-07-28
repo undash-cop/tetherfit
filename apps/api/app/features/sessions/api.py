@@ -11,6 +11,7 @@ from app.features.sessions.schemas import (
     SessionCreate,
     SessionOut,
     SessionUpdate,
+    StartSessionBody,
 )
 from app.features.sessions.services import SessionService
 
@@ -78,11 +79,12 @@ async def check_in_session(
 @router.post("/sessions/{session_id}/start", response_model=SessionOut)
 async def start_session(
     session_id: UUID,
+    body: StartSessionBody | None = None,
     principal: AuthPrincipal = Depends(require_permission("session:start")),
     _: AuthPrincipal = Depends(require_organization),
     db: AsyncSession = Depends(get_db),
 ) -> SessionOut:
-    return await SessionService(db).start(org_id(principal), session_id)
+    return await SessionService(db).start(org_id(principal), session_id, body)
 
 
 @router.post("/sessions/{session_id}/pause", response_model=SessionOut)

@@ -30,14 +30,14 @@
    ```
 6. Open http://localhost:5173 — public site works without Keycloak; `/app` requires login.
 
-## Product flow (through Phase 6)
+## Product flow (through Phase 7)
 
-1. Trainers: `/app` — CRM, calendar (drag-drop), pause/resume sessions, assessments with photos, billing, chat
+1. Trainers: `/app` — clients CRM (PT dates, paid/completed), schedule/cancel/invoice, GPS session start, cash/UPI QR + GST invoices, settings hub
 2. Clients: `/client` progress photos after portal invite
 3. Platform admins: `/admin`
-4. Payments: Razorpay confirm path + public webhook settle
+4. Payments: cash confirm, UPI QR from org VPA, GST HTML invoice, Razorpay webhook
 5. Notifications: SMTP when configured, else noop
-6. `alembic upgrade head` through `0007_phase6`
+6. `alembic upgrade head` through `0008_phase7`
 
 ## Quality commands
 

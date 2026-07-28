@@ -13,6 +13,7 @@ from app.features.sessions.schemas import (
     SessionCreate,
     SessionOut,
     SessionUpdate,
+    StartSessionBody,
 )
 
 
@@ -147,7 +148,12 @@ class SessionService:
         await self.db.flush()
         return await self.get(organization_id, session_id)
 
-    async def start(self, organization_id: UUID, session_id: UUID) -> SessionOut:
+    async def start(
+        self,
+        organization_id: UUID,
+        session_id: UUID,
+        body: StartSessionBody | None = None,
+    ) -> SessionOut:
         session = await self._load(organization_id, session_id)
         if session.status not in {SessionStatus.SCHEDULED, SessionStatus.CHECKED_IN}:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Invalid transition")
@@ -155,6 +161,15 @@ class SessionService:
         session.started_at = datetime.now(UTC)
         if session.check_in_at is None:
             session.check_in_at = session.started_at
+        if body is not None:
+            if body.latitude is not None:
+                session.start_latitude = body.latitude
+            if body.longitude is not None:
+                session.start_longitude = body.longitude
+            if body.accuracy_m is not None:
+                session.start_accuracy_m = body.accuracy_m
+            if body.location_label and not session.location:
+                session.location = body.location_label
         await self.db.flush()
         return await self.get(organization_id, session_id)
 

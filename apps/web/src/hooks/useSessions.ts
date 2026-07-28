@@ -61,6 +61,7 @@ function useSessionAction(action: string) {
       }),
     onSuccess: (data) => {
       void qc.invalidateQueries({ queryKey: ["sessions", data.id] });
+      void qc.invalidateQueries({ queryKey: ["sessions", "client"] });
       void qc.invalidateQueries({ queryKey: ["calendar"] });
       void qc.invalidateQueries({ queryKey: ["dashboard"] });
       void qc.invalidateQueries({ queryKey: ["packages"] });

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge, Input, Label } from "@/components/ui/field";
 import { useClients } from "@/hooks/useClients";
+import { useMe } from "@/hooks/useMe";
 import { useDashboard } from "@/hooks/useSessions";
 import { apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth/keycloak";
@@ -14,6 +15,7 @@ type Invoice = {
   client_id: string;
   status: string;
   total_paise: number;
+  tax_paise?: number;
   currency: string;
 };
 type Payment = {
@@ -21,8 +23,16 @@ type Payment = {
   amount_paise: number;
   status: string;
   provider: string;
+  method?: string | null;
   invoice_id: string | null;
   checkout?: Record<string, unknown>;
+};
+type UpiQr = {
+  upi_vpa: string;
+  upi_uri: string;
+  qr_image_url: string;
+  amount_paise: number;
+  invoice_number: string;
 };
 
 function formatMoney(paise: number, currency = "INR") {
@@ -33,8 +43,19 @@ function formatMoney(paise: number, currency = "INR") {
   }).format(paise / 100);
 }
 
+async function openGstInvoice(invoiceId: string) {
+  const base = import.meta.env.VITE_API_BASE_URL ?? "";
+  const res = await fetch(`${base}/api/v1/invoices/${invoiceId}/gst-invoice`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  const htmlDoc = await res.text();
+  const blob = new Blob([htmlDoc], { type: "text/html" });
+  window.open(URL.createObjectURL(blob), "_blank");
+}
+
 export function PaymentsPage() {
   const dash = useDashboard();
+  const me = useMe();
   const clients = useClients();
   const qc = useQueryClient();
   const invoices = useQuery({
@@ -48,6 +69,10 @@ export function PaymentsPage() {
 
   const [clientId, setClientId] = useState("");
   const [amount, setAmount] = useState(5000);
+  const [qr, setQr] = useState<UpiQr | null>(null);
+  const [qrInvoiceId, setQrInvoiceId] = useState<string | null>(null);
+
+  const gstPct = me.data?.organization?.default_gst_pct ?? 0;
 
   const createInvoice = useMutation({
     mutationFn: () =>
@@ -57,13 +82,13 @@ export function PaymentsPage() {
         body: JSON.stringify({
           client_id: clientId,
           line_items: [{ description: "Training package", quantity: 1, unit_paise: amount * 100 }],
-          tax_paise: 0,
+          apply_default_gst: true,
         }),
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["invoices"] }),
   });
 
-  const collect = useMutation({
+  const collectUpi = useMutation({
     mutationFn: async (invoiceId: string) => {
       const payment = await apiFetch<Payment>("/api/v1/payments/collect", {
         method: "POST",
@@ -82,9 +107,38 @@ export function PaymentsPage() {
       return payment;
     },
     onSuccess: () => {
+      setQr(null);
+      setQrInvoiceId(null);
       void qc.invalidateQueries({ queryKey: ["payments"] });
       void qc.invalidateQueries({ queryKey: ["invoices"] });
       void qc.invalidateQueries({ queryKey: ["dashboard"] });
+      void qc.invalidateQueries({ queryKey: ["clients"] });
+    },
+  });
+
+  const collectCash = useMutation({
+    mutationFn: (invoiceId: string) =>
+      apiFetch<Payment>("/api/v1/payments/cash", {
+        method: "POST",
+        token: getToken(),
+        body: JSON.stringify({ invoice_id: invoiceId }),
+      }),
+    onSuccess: () => {
+      setQr(null);
+      setQrInvoiceId(null);
+      void qc.invalidateQueries({ queryKey: ["payments"] });
+      void qc.invalidateQueries({ queryKey: ["invoices"] });
+      void qc.invalidateQueries({ queryKey: ["dashboard"] });
+      void qc.invalidateQueries({ queryKey: ["clients"] });
+    },
+  });
+
+  const showQr = useMutation({
+    mutationFn: (invoiceId: string) =>
+      apiFetch<UpiQr>(`/api/v1/invoices/${invoiceId}/upi-qr`, { token: getToken() }),
+    onSuccess: (data, invoiceId) => {
+      setQr(data);
+      setQrInvoiceId(invoiceId);
     },
   });
 
@@ -97,6 +151,9 @@ export function PaymentsPage() {
         <p className="font-display text-4xl font-bold text-lime">
           {dash.data?.total_remaining_credits ?? 0}
         </p>
+        {gstPct > 0 && (
+          <p className="mt-2 text-xs text-sand/70">Default GST {gstPct}% applied on new invoices</p>
+        )}
       </div>
 
       <div className="space-y-3 rounded-2xl border border-forest/10 bg-white/70 p-4 dark:border-sand/10 dark:bg-white/5">
@@ -114,7 +171,7 @@ export function PaymentsPage() {
             </option>
           ))}
         </select>
-        <Label>Amount (INR)</Label>
+        <Label>Amount before GST (INR)</Label>
         <Input
           type="number"
           value={amount}
@@ -128,29 +185,73 @@ export function PaymentsPage() {
         </Button>
       </div>
 
+      {qr && (
+        <div className="space-y-3 rounded-2xl border border-moss/30 bg-moss/5 p-4 dark:border-lime/30">
+          <h2 className="font-display text-xl font-bold">UPI QR · {qr.invoice_number}</h2>
+          <p className="text-sm text-slate dark:text-sand/70">
+            Pay {formatMoney(qr.amount_paise)} to {qr.upi_vpa}
+          </p>
+          <img
+            src={qr.qr_image_url}
+            alt="UPI QR code"
+            className="mx-auto h-56 w-56 rounded-xl bg-white p-2"
+          />
+          {qrInvoiceId && (
+            <Button
+              className="w-full"
+              disabled={collectUpi.isPending}
+              onClick={() => collectUpi.mutate(qrInvoiceId)}
+            >
+              Mark UPI received
+            </Button>
+          )}
+        </div>
+      )}
+
       <h2 className="font-display text-xl font-bold">Invoices</h2>
       <ul className="space-y-2">
         {(invoices.data ?? []).map((inv) => (
           <li
             key={inv.id}
-            className="flex items-center justify-between rounded-2xl border border-forest/10 bg-white/70 px-4 py-3 dark:border-sand/10 dark:bg-white/5"
+            className="space-y-2 rounded-2xl border border-forest/10 bg-white/70 px-4 py-3 dark:border-sand/10 dark:bg-white/5"
           >
-            <div>
-              <p className="font-semibold">{inv.invoice_number}</p>
-              <p className="text-sm text-slate dark:text-sand/60">
-                {formatMoney(inv.total_paise, inv.currency)}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="font-semibold">{inv.invoice_number}</p>
+                <p className="text-sm text-slate dark:text-sand/60">
+                  {formatMoney(inv.total_paise, inv.currency)}
+                  {inv.tax_paise ? ` · GST ${formatMoney(inv.tax_paise)}` : ""}
+                </p>
+              </div>
               <Badge>{inv.status}</Badge>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => void openGstInvoice(inv.id)}>
+                GST invoice
+              </Button>
               {inv.status !== "paid" && (
-                <Button
-                  size="default"
-                  disabled={collect.isPending}
-                  onClick={() => collect.mutate(inv.id)}
-                >
-                  Collect
-                </Button>
+                <>
+                  <Button
+                    variant="secondary"
+                    disabled={showQr.isPending}
+                    onClick={() => showQr.mutate(inv.id)}
+                  >
+                    Show QR
+                  </Button>
+                  <Button
+                    disabled={collectCash.isPending}
+                    onClick={() => collectCash.mutate(inv.id)}
+                  >
+                    Cash received
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    disabled={collectUpi.isPending}
+                    onClick={() => collectUpi.mutate(inv.id)}
+                  >
+                    Confirm UPI
+                  </Button>
+                </>
               )}
             </div>
           </li>
@@ -166,7 +267,7 @@ export function PaymentsPage() {
           >
             <span>{formatMoney(p.amount_paise)}</span>
             <Badge>
-              {p.provider} · {p.status}
+              {p.method || p.provider} · {p.status}
             </Badge>
           </li>
         ))}

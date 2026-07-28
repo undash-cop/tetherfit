@@ -14,6 +14,30 @@ import {
   useStartSession,
 } from "@/hooks/useSessions";
 
+async function readGeo(): Promise<{
+  latitude?: number;
+  longitude?: number;
+  accuracy_m?: number;
+}> {
+  if (!navigator.geolocation) return {};
+  try {
+    const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 8000,
+        maximumAge: 30_000,
+      });
+    });
+    return {
+      latitude: pos.coords.latitude,
+      longitude: pos.coords.longitude,
+      accuracy_m: pos.coords.accuracy,
+    };
+  } catch {
+    return {};
+  }
+}
+
 export function SessionDetailPage() {
   const { id } = useParams();
   const session = useSession(id);
@@ -26,6 +50,7 @@ export function SessionDetailPage() {
   const noShow = useNoShowSession();
   const [notes, setNotes] = useState("");
   const [rating, setRating] = useState(5);
+  const [geoError, setGeoError] = useState<string | null>(null);
 
   if (session.isLoading) return <p>Loading…</p>;
   if (!session.data) return <p>Session not found.</p>;
@@ -55,6 +80,12 @@ export function SessionDetailPage() {
         </p>
         <p className="mt-2 text-sm text-slate dark:text-sand/60">{s.location || "No location"}</p>
         <p className="mt-2 text-sm">{s.notes || "No notes yet"}</p>
+        {s.start_latitude != null && s.start_longitude != null && (
+          <p className="mt-2 text-xs text-moss dark:text-lime">
+            Started at {s.start_latitude.toFixed(5)}, {s.start_longitude.toFixed(5)}
+            {s.start_accuracy_m != null ? ` (±${Math.round(s.start_accuracy_m)}m)` : ""}
+          </p>
+        )}
         {s.credit_deducted && (
           <p className="mt-2 text-xs font-semibold text-moss dark:text-lime">Credit deducted</p>
         )}
@@ -72,14 +103,26 @@ export function SessionDetailPage() {
             </Button>
           )}
           {(s.status === "scheduled" || s.status === "checked_in") && (
-            <Button
-              className="w-full"
-              variant="secondary"
-              disabled={start.isPending}
-              onClick={() => start.mutate({ id: s.id })}
-            >
-              Start session
-            </Button>
+            <>
+              <Button
+                className="w-full"
+                variant="secondary"
+                disabled={start.isPending}
+                onClick={() => {
+                  void (async () => {
+                    setGeoError(null);
+                    const geo = await readGeo();
+                    if (geo.latitude == null) {
+                      setGeoError("Location unavailable — starting without GPS.");
+                    }
+                    start.mutate({ id: s.id, body: geo });
+                  })();
+                }}
+              >
+                Start session
+              </Button>
+              {geoError && <p className="text-xs text-amber-700 dark:text-amber-300">{geoError}</p>}
+            </>
           )}
           {s.status === "in_progress" && (
             <Button

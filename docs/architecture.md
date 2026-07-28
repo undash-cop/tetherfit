@@ -2,7 +2,19 @@
 
 ## Overview
 
-TetherFit Phase 6 (Production Completeness) adds session pause/resume, calendar drag-drop reschedule, assessment transformation photos via R2, SMTP email notifications, Razorpay webhooks, demo seed data, and Playwright public smoke tests.
+TetherFit Phase 7 (Solo Trainer CRM) adds client roster CRM fields and actions, geolocation on session start, cash/UPI QR collection, GST invoice HTML, and a settings hub for business/GST/UPI/availability.
+
+## Phase 7 modules
+
+| Module | API / surface | Notes |
+|--------|---------------|-------|
+| Client CRM | `ClientOut` aggregates + PT dates | Joined, paid, completed, `pt_start_at`/`pt_end_at` |
+| Client actions | Web client detail | Schedule recurrence, cancel upcoming, GST invoice |
+| Geo start | `POST /sessions/{id}/start` + `StartSessionBody` | Persists `start_latitude/longitude/accuracy_m` |
+| Cash pay | `POST /payments/cash` | Immediate success + invoice paid |
+| UPI QR | `GET /invoices/{id}/upi-qr` | Uses org `upi_vpa` |
+| GST invoice | `GET /invoices/{id}/gst-invoice` | Printable HTML; tax from `default_gst_pct` |
+| Settings hub | `PATCH /organizations/me` | Business address/phone, GSTIN, UPI, GST % + availability |
 
 ## Phase 6 modules
 
@@ -19,10 +31,12 @@ TetherFit Phase 6 (Production Completeness) adds session pause/resume, calendar 
 
 | Path | Role |
 |------|------|
+| `/app/clients` | Roster with PT / paid / completed |
+| `/app/clients/:id` | Schedule, cancel, invoice |
+| `/app/sessions/:id` | GPS capture on start; pause / resume |
+| `/app/payments` | Cash, UPI QR, GST invoice |
+| `/app/settings` | Business, GST, UPI, availability |
 | `/app/calendar` | Drag-drop reschedule (day/week) |
-| `/app/sessions/:id` | Pause / resume |
-| `/app/clients/:id` assessments | Metrics + photo upload |
-| `/client/progress` | Photo thumbnails |
 | `/`, `/features`, `/marketplace` | Public marketing (Playwright) |
 
 ## Ops
@@ -33,4 +47,5 @@ TetherFit Phase 6 (Production Completeness) adds session pause/resume, calendar 
 
 ## Migration
 
+`0008_phase7` — clients PT dates; org business/UPI/GST; session start geo  
 `0007_phase6` — `pt_sessions.paused_at`

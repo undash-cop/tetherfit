@@ -30,6 +30,13 @@ def test_session_create_ok():
     assert data.location == "Studio A"
 
 
+def test_start_session_body_accepts_geo():
+    from app.features.sessions.schemas import StartSessionBody
+
+    body = StartSessionBody(latitude=12.9716, longitude=77.5946, accuracy_m=8)
+    assert body.accuracy_m == 8
+
+
 def test_session_status_values():
     assert SessionStatus.SCHEDULED == "scheduled"
     assert SessionStatus.COMPLETED == "completed"

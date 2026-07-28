@@ -16,6 +16,8 @@ class ClientCreate(BaseModel):
     emergency_contact_phone: str | None = None
     tags: list[str] = Field(default_factory=list)
     notes: str | None = None
+    pt_start_at: datetime | None = None
+    pt_end_at: datetime | None = None
 
 
 class ClientUpdate(BaseModel):
@@ -30,6 +32,8 @@ class ClientUpdate(BaseModel):
     emergency_contact_phone: str | None = None
     tags: list[str] | None = None
     notes: str | None = None
+    pt_start_at: datetime | None = None
+    pt_end_at: datetime | None = None
 
 
 class ClientOut(BaseModel):
@@ -49,6 +53,11 @@ class ClientOut(BaseModel):
     tags: list[str]
     avatar: str | None
     notes: str | None
+    pt_start_at: datetime | None = None
+    pt_end_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     remaining_credits: int | None = None
+    joined_on: datetime | None = None
+    sessions_completed: int = 0
+    amount_paid_paise: int = 0

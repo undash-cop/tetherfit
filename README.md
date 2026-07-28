@@ -57,7 +57,9 @@ docker compose -f docker/docker-compose.yml up --build
 
 ## Phase status
 
-**Phase 6 – Production Completeness** (current): session pause/resume, calendar DnD, R2 transformation photos, SMTP email, Razorpay webhook, seed + Playwright smoke. API `0.7.0` / migration `0007_phase6`.
+**Phase 7 – Solo Trainer CRM** (current): client roster PT dates + paid/completed stats, schedule/cancel/invoice from client detail, GPS on session start, cash + UPI QR payments, GST tax invoices, settings hub (business/GST/UPI/availability). API `0.8.0` / migration `0008_phase7`.
+
+**Phase 6 – Production Completeness**: session pause/resume, calendar DnD, R2 transformation photos, SMTP email, Razorpay webhook, seed + Playwright smoke. API `0.7.0` / migration `0007_phase6`.
 
 **Phase 5 – Polish & Growth**: recurring sessions, availability, realtime chat, push, automations, refunds/memberships, metrics, k8s.
 

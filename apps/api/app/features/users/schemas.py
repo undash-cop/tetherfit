@@ -10,6 +10,11 @@ class OrganizationOut(BaseModel):
     name: str
     slug: str
     timezone: str
+    gstin: str | None = None
+    business_address: str | None = None
+    business_phone: str | None = None
+    upi_vpa: str | None = None
+    default_gst_pct: float = 0.0
 
 
 class UserMeOut(BaseModel):
@@ -37,6 +42,11 @@ class OrganizationCreate(BaseModel):
 class OrganizationUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=255)
     timezone: str | None = Field(default=None, max_length=64)
+    gstin: str | None = Field(default=None, max_length=32)
+    business_address: str | None = None
+    business_phone: str | None = Field(default=None, max_length=32)
+    upi_vpa: str | None = Field(default=None, max_length=128)
+    default_gst_pct: float | None = Field(default=None, ge=0, le=100)
 
 
 class HealthComponent(BaseModel):

@@ -12,6 +12,14 @@ class ClientService:
     def __init__(self, db: AsyncSession) -> None:
         self.repo = ClientRepository(db)
 
+    async def _enrich(self, organization_id: UUID, client) -> ClientOut:
+        out = ClientOut.model_validate(client)
+        out.joined_on = client.created_at
+        out.remaining_credits = await self.repo.remaining_credits(organization_id, client.id)
+        out.sessions_completed = await self.repo.sessions_completed(organization_id, client.id)
+        out.amount_paid_paise = await self.repo.amount_paid_paise(organization_id, client.id)
+        return out
+
     async def list_clients(
         self,
         organization_id: UUID,
@@ -24,20 +32,14 @@ class ClientService:
         items, total = await self.repo.list(
             organization_id, limit=limit, offset=offset, q=q, status=status_filter
         )
-        outs: list[ClientOut] = []
-        for item in items:
-            out = ClientOut.model_validate(item)
-            out.remaining_credits = await self.repo.remaining_credits(organization_id, item.id)
-            outs.append(out)
+        outs = [await self._enrich(organization_id, item) for item in items]
         return Page(items=outs, meta=PageMeta(total=total, limit=limit, offset=offset))
 
     async def get(self, organization_id: UUID, client_id: UUID) -> ClientOut:
         client = await self.repo.get(organization_id, client_id)
         if not client:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
-        out = ClientOut.model_validate(client)
-        out.remaining_credits = await self.repo.remaining_credits(organization_id, client.id)
-        return out
+        return await self._enrich(organization_id, client)
 
     async def create(self, organization_id: UUID, data: ClientCreate, actor_id: UUID) -> ClientOut:
         payload = data.model_dump()
@@ -47,9 +49,7 @@ class ClientService:
             created_by=actor_id,
             updated_by=actor_id,
         )
-        out = ClientOut.model_validate(client)
-        out.remaining_credits = 0
-        return out
+        return await self._enrich(organization_id, client)
 
     async def update(
         self, organization_id: UUID, client_id: UUID, data: ClientUpdate, actor_id: UUID

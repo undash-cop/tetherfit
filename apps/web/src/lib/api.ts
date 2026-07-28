@@ -85,6 +85,11 @@ export type UserMe = {
     name: string;
     slug: string;
     timezone: string;
+    gstin?: string | null;
+    business_address?: string | null;
+    business_phone?: string | null;
+    upi_vpa?: string | null;
+    default_gst_pct?: number;
   } | null;
 };
 
@@ -103,9 +108,14 @@ export type Client = {
   tags: string[];
   avatar: string | null;
   notes: string | null;
+  pt_start_at?: string | null;
+  pt_end_at?: string | null;
   created_at: string;
   updated_at: string;
   remaining_credits: number | null;
+  joined_on?: string | null;
+  sessions_completed?: number;
+  amount_paid_paise?: number;
 };
 
 export type Page<T> = {
@@ -137,7 +147,11 @@ export type PtSession = {
   notes: string | null;
   check_in_at: string | null;
   started_at: string | null;
+  paused_at?: string | null;
   finished_at: string | null;
+  start_latitude?: number | null;
+  start_longitude?: number | null;
+  start_accuracy_m?: number | null;
   rating: number | null;
   package_id: string | null;
   credit_deducted: boolean;

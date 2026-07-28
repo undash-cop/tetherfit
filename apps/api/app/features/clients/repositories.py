@@ -4,7 +4,14 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models import Client, SessionPackage
+from app.domain.models import (
+    Client,
+    Invoice,
+    InvoiceStatus,
+    PtSession,
+    SessionPackage,
+    SessionStatus,
+)
 
 
 class ClientRepository:
@@ -74,6 +81,28 @@ class ClientRepository:
                 SessionPackage.client_id == client_id,
                 SessionPackage.deleted_at.is_(None),
                 SessionPackage.remaining_sessions > 0,
+            )
+        )
+        return int(total or 0)
+
+    async def sessions_completed(self, organization_id: UUID, client_id: UUID) -> int:
+        total = await self.db.scalar(
+            select(func.count()).select_from(PtSession).where(
+                PtSession.organization_id == organization_id,
+                PtSession.client_id == client_id,
+                PtSession.deleted_at.is_(None),
+                PtSession.status == SessionStatus.COMPLETED,
+            )
+        )
+        return int(total or 0)
+
+    async def amount_paid_paise(self, organization_id: UUID, client_id: UUID) -> int:
+        total = await self.db.scalar(
+            select(func.coalesce(func.sum(Invoice.total_paise), 0)).where(
+                Invoice.organization_id == organization_id,
+                Invoice.client_id == client_id,
+                Invoice.deleted_at.is_(None),
+                Invoice.status == InvoiceStatus.PAID,
             )
         )
         return int(total or 0)

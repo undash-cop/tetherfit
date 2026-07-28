@@ -5,6 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Badge, Input } from "@/components/ui/field";
 import { useClients } from "@/hooks/useClients";
 
+function formatMoney(paise: number) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(paise / 100);
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+}
+
 export function ClientsPage() {
   const [q, setQ] = useState("");
   const { data, isLoading, error } = useClients(q);
@@ -31,19 +44,42 @@ export function ClientsPage() {
           <li key={client.id}>
             <Link
               to={`/app/clients/${client.id}`}
-              className="flex items-center justify-between rounded-2xl border border-forest/10 bg-white/70 px-4 py-3 dark:border-sand/10 dark:bg-white/5"
+              className="block rounded-2xl border border-forest/10 bg-white/70 px-4 py-3 dark:border-sand/10 dark:bg-white/5"
             >
-              <div>
-                <p className="font-semibold">{client.full_name}</p>
-                <p className="text-xs text-slate dark:text-sand/60">
-                  {client.phone || client.email || "No contact"}
-                </p>
-              </div>
-              <div className="text-right">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold">{client.full_name}</p>
+                  <p className="text-xs text-slate dark:text-sand/60">
+                    Joined {formatDate(client.joined_on ?? client.created_at)}
+                  </p>
+                </div>
                 <Badge>{client.status}</Badge>
-                <p className="mt-1 text-xs text-slate dark:text-sand/60">
-                  {client.remaining_credits ?? 0} left
-                </p>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate dark:text-sand/70 sm:grid-cols-4">
+                <div>
+                  <p className="uppercase tracking-wide opacity-70">PT start</p>
+                  <p className="font-semibold text-forest dark:text-sand">
+                    {formatDate(client.pt_start_at)}
+                  </p>
+                </div>
+                <div>
+                  <p className="uppercase tracking-wide opacity-70">PT end</p>
+                  <p className="font-semibold text-forest dark:text-sand">
+                    {formatDate(client.pt_end_at)}
+                  </p>
+                </div>
+                <div>
+                  <p className="uppercase tracking-wide opacity-70">Paid</p>
+                  <p className="font-semibold text-forest dark:text-sand">
+                    {formatMoney(client.amount_paid_paise ?? 0)}
+                  </p>
+                </div>
+                <div>
+                  <p className="uppercase tracking-wide opacity-70">Done / left</p>
+                  <p className="font-semibold text-forest dark:text-sand">
+                    {client.sessions_completed ?? 0} / {client.remaining_credits ?? 0}
+                  </p>
+                </div>
               </div>
             </Link>
           </li>
