@@ -1,6 +1,6 @@
-import { CalendarDays, CreditCard, Home, Plus, UserRound, Users, X } from "lucide-react";
+import { CalendarDays, CreditCard, Home, Plus, Settings, Users, X } from "lucide-react";
 import { useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 
 import { InstallPrompt, OfflineBanner } from "@/components/offline/OfflineChrome";
 import { Button } from "@/components/ui/button";
@@ -9,10 +9,10 @@ import { useAuthStore } from "@/stores/auth";
 
 const tabs = [
   { to: "/app", label: "Home", icon: Home, end: true },
-  { to: "/app/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/app/clients", label: "Clients", icon: Users },
+  { to: "/app/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/app/payments", label: "Payments", icon: CreditCard },
-  { to: "/app/profile", label: "Profile", icon: UserRound },
+  { to: "/app/settings", label: "Settings", icon: Settings },
 ];
 
 export function AppShell() {
@@ -90,31 +90,11 @@ export function AppShell() {
               variant="outline"
               onClick={() => {
                 setFabOpen(false);
-                void navigate("/app/ai");
+                void navigate("/app/payments");
               }}
             >
-              Coach Copilot
+              Collect payment / GST invoice
             </Button>
-            <Button
-              className="w-full"
-              variant="outline"
-              onClick={() => {
-                setFabOpen(false);
-                void navigate("/app/workouts");
-              }}
-            >
-              Workouts
-            </Button>
-            <Link to="/app/analytics" onClick={() => setFabOpen(false)}>
-              <Button className="w-full" variant="ghost">
-                Analytics
-              </Button>
-            </Link>
-            <Link to="/app/clients" onClick={() => setFabOpen(false)}>
-              <Button className="w-full" variant="outline">
-                View clients
-              </Button>
-            </Link>
           </div>
         </div>
       )}

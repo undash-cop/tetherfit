@@ -24,7 +24,6 @@ import { MarketplacePage } from "@/pages/app/MarketplacePage";
 import { NutritionPage } from "@/pages/app/NutritionPage";
 import { OnboardingPage } from "@/pages/app/OnboardingPage";
 import { PaymentsPage } from "@/pages/app/PaymentsPage";
-import { ProfilePage } from "@/pages/app/ProfilePage";
 import { ReportsPage } from "@/pages/app/ReportsPage";
 import { SessionDetailPage } from "@/pages/app/SessionDetailPage";
 import { SchedulingPage } from "@/pages/app/SchedulingPage";
@@ -83,7 +82,7 @@ export function AppRouter() {
             <Route path="scheduling" element={<SchedulingPage />} />
             <Route path="automations" element={<AutomationsPage />} />
             <Route path="payments" element={<PaymentsPage />} />
-            <Route path="profile" element={<ProfilePage />} />
+            <Route path="profile" element={<Navigate to="/app/settings" replace />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
 

@@ -1,10 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { Link, useParams } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { Badge, Input, Label } from "@/components/ui/field";
-import { useClient, useClientPackages, useCreatePackage } from "@/hooks/useClients";
+import {
+  useClient,
+  useClientPackages,
+  useCreatePackage,
+  useUpdateClient,
+} from "@/hooks/useClients";
 import { useCancelSession, useClientSessions } from "@/hooks/useSessions";
 import { apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth/keycloak";
@@ -50,10 +55,12 @@ const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function ClientDetailPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const client = useClient(id);
   const packages = useClientPackages(id);
   const history = useClientSessions(id);
   const createPkg = useCreatePackage(id!);
+  const updateClient = useUpdateClient(id!);
   const cancelSession = useCancelSession();
   const qc = useQueryClient();
   const [sessions, setSessions] = useState(10);
@@ -65,9 +72,33 @@ export function ClientDetailPage() {
   const [scheduleWeekday, setScheduleWeekday] = useState(0);
   const [scheduleDuration, setScheduleDuration] = useState(60);
   const [invoiceAmount, setInvoiceAmount] = useState(5000);
+  const [ptStart, setPtStart] = useState("");
+  const [ptEnd, setPtEnd] = useState("");
   const [tab, setTab] = useState<
     "overview" | "credits" | "sessions" | "assessments" | "notes"
   >("overview");
+  const [focusPanel, setFocusPanel] = useState<"schedule" | "invoice" | null>(null);
+
+  useEffect(() => {
+    const action = searchParams.get("action");
+    const tabParam = searchParams.get("tab");
+    if (tabParam === "sessions") {
+      setTab("sessions");
+      setFocusPanel(null);
+    } else if (action === "schedule") {
+      setTab("overview");
+      setFocusPanel("schedule");
+    } else if (action === "invoice") {
+      setTab("overview");
+      setFocusPanel("invoice");
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!client.data) return;
+    setPtStart(client.data.pt_start_at ? client.data.pt_start_at.slice(0, 10) : "");
+    setPtEnd(client.data.pt_end_at ? client.data.pt_end_at.slice(0, 10) : "");
+  }, [client.data]);
 
   const assessments = useQuery({
     queryKey: ["assessments", id],
@@ -237,12 +268,12 @@ export function ClientDetailPage() {
             {formatDate(c.joined_on ?? c.created_at)}
           </p>
           <p>
-            <span className="text-slate dark:text-sand/60">PT period:</span>{" "}
-            {formatDate(c.pt_start_at)} → {formatDate(c.pt_end_at)}
-          </p>
-          <p>
             <span className="text-slate dark:text-sand/60">Amount paid:</span>{" "}
             {formatMoney(c.amount_paid_paise ?? 0)}
+          </p>
+          <p>
+            <span className="text-slate dark:text-sand/60">Sessions completed:</span>{" "}
+            {c.sessions_completed ?? 0}
           </p>
           <p>
             <span className="text-slate dark:text-sand/60">Phone:</span> {c.phone || "—"}
@@ -255,7 +286,36 @@ export function ClientDetailPage() {
           </p>
 
           <div className="space-y-2 border-t border-forest/10 pt-3 dark:border-sand/10">
+            <h2 className="font-display text-lg font-bold">PT period</h2>
+            <Label>PT start</Label>
+            <Input type="date" value={ptStart} onChange={(e) => setPtStart(e.target.value)} />
+            <Label>PT end</Label>
+            <Input type="date" value={ptEnd} onChange={(e) => setPtEnd(e.target.value)} />
+            <Button
+              className="w-full"
+              variant="outline"
+              disabled={updateClient.isPending}
+              onClick={() =>
+                updateClient.mutate({
+                  pt_start_at: ptStart ? new Date(ptStart).toISOString() : null,
+                  pt_end_at: ptEnd ? new Date(ptEnd).toISOString() : null,
+                })
+              }
+            >
+              Save PT dates
+            </Button>
+          </div>
+
+          <div
+            id="schedule-panel"
+            className={`space-y-2 border-t border-forest/10 pt-3 dark:border-sand/10 ${
+              focusPanel === "schedule" ? "rounded-xl ring-2 ring-moss/40 p-2" : ""
+            }`}
+          >
             <h2 className="font-display text-lg font-bold">Schedule series</h2>
+            <p className="text-xs text-slate dark:text-sand/60">
+              Set frequency (weekday) and session duration, then generate upcoming classes.
+            </p>
             <Label>First session</Label>
             <Input
               type="datetime-local"
@@ -269,7 +329,7 @@ export function ClientDetailPage() {
               value={scheduleDuration}
               onChange={(e) => setScheduleDuration(Number(e.target.value))}
             />
-            <Label>Weekday</Label>
+            <Label>Weekday frequency</Label>
             <div className="flex flex-wrap gap-2">
               {days.map((d, i) => (
                 <button
@@ -295,7 +355,12 @@ export function ClientDetailPage() {
             </Button>
           </div>
 
-          <div className="space-y-2 border-t border-forest/10 pt-3 dark:border-sand/10">
+          <div
+            id="invoice-panel"
+            className={`space-y-2 border-t border-forest/10 pt-3 dark:border-sand/10 ${
+              focusPanel === "invoice" ? "rounded-xl ring-2 ring-moss/40 p-2" : ""
+            }`}
+          >
             <h2 className="font-display text-lg font-bold">Generate invoice</h2>
             <Label>Amount (INR, before GST)</Label>
             <Input

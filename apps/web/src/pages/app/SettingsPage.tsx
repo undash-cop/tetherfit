@@ -87,6 +87,9 @@ export function SettingsPage() {
   return (
     <section className="space-y-6">
       <h1 className="font-display text-3xl font-bold text-forest dark:text-lime">Settings</h1>
+      <p className="text-sm text-slate dark:text-sand/70">
+        Trainer details, availability, GST and business info for invoices
+      </p>
 
       <div className="rounded-2xl border border-forest/10 bg-white/70 p-4 dark:border-sand/10 dark:bg-white/5">
         <h2 className="font-display text-xl font-bold">Trainer profile</h2>
