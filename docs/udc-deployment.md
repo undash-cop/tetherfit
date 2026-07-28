@@ -9,6 +9,7 @@ TetherFit API on the shared **UDC** stack (`udc-infra`, `deploy-apps.sh`). Front
 | Host | `https://api.tetherfit.undash-cop.com` |
 | Clone path | `/opt/udc/repos/tetherfit` |
 | Deploy | `./scripts/deploy-apps.sh --only tetherfit` |
+| Migrations | Automatic in API entrypoint (`alembic upgrade head`) |
 | Worker/Beat | `docker compose -f docker/docker-compose.apps.phase.yml up -d tetherfit-worker tetherfit-beat` |
 
 ## First-time checklist

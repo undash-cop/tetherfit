@@ -64,7 +64,9 @@ cd apps/web && npm run dev
 
 ## Migrations
 
-Run migrations as a release step on the VPS:
+The API container entrypoint runs `alembic upgrade head` automatically on every start (before uvicorn). Worker/beat skip migrate to avoid races.
+
+Manual one-shot if needed:
 
 ```bash
 docker compose -f docker/docker-compose.apps.phase.yml run --rm tetherfit alembic upgrade head
