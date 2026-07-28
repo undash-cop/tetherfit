@@ -8,6 +8,7 @@ import { useClient, useUpdateClient } from "@/hooks/useClients";
 import { useCancelSession, useClientSessions } from "@/hooks/useSessions";
 import { apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth/keycloak";
+import { openGstInvoice } from "@/lib/gstInvoice";
 
 type Assessment = {
   id: string;
@@ -78,17 +79,6 @@ function ptValidityDetail(
   if (code === "expired") return `Ended ${formatDate(end)}`;
   if (code === "active") return `${formatDate(start)} → ${formatDate(end)}`;
   return "Set PT start and end dates";
-}
-
-async function openGstInvoice(invoiceId: string) {
-  const base = import.meta.env.VITE_API_BASE_URL ?? "";
-  const res = await fetch(`${base}/api/v1/invoices/${invoiceId}/gst-invoice`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
-  });
-  if (!res.ok) throw new Error("Could not open GST invoice");
-  const htmlDoc = await res.text();
-  const blob = new Blob([htmlDoc], { type: "text/html" });
-  window.open(URL.createObjectURL(blob), "_blank");
 }
 
 const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];

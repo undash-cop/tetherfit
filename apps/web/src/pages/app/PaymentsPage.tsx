@@ -7,6 +7,7 @@ import { useClients } from "@/hooks/useClients";
 import { useMe } from "@/hooks/useMe";
 import { apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth/keycloak";
+import { openGstInvoice } from "@/lib/gstInvoice";
 
 type Invoice = {
   id: string;
@@ -40,16 +41,6 @@ function formatMoney(paise: number, currency = "INR") {
     currency,
     maximumFractionDigits: 0,
   }).format(paise / 100);
-}
-
-async function openGstInvoice(invoiceId: string) {
-  const base = import.meta.env.VITE_API_BASE_URL ?? "";
-  const res = await fetch(`${base}/api/v1/invoices/${invoiceId}/gst-invoice`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
-  });
-  const htmlDoc = await res.text();
-  const blob = new Blob([htmlDoc], { type: "text/html" });
-  window.open(URL.createObjectURL(blob), "_blank");
 }
 
 export function PaymentsPage() {
