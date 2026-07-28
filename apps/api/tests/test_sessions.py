@@ -37,7 +37,7 @@ def test_session_status_values():
 
 
 def test_allowed_transitions_matrix():
-    """Document valid Phase 1 transitions for regression clarity."""
+    """Document valid session transitions for regression clarity."""
     allowed = {
         SessionStatus.SCHEDULED: {
             SessionStatus.CHECKED_IN,
@@ -52,10 +52,20 @@ def test_allowed_transitions_matrix():
             SessionStatus.CANCELLED,
             SessionStatus.NO_SHOW,
         },
-        SessionStatus.IN_PROGRESS: {SessionStatus.COMPLETED, SessionStatus.CANCELLED},
+        SessionStatus.IN_PROGRESS: {
+            SessionStatus.PAUSED,
+            SessionStatus.COMPLETED,
+            SessionStatus.CANCELLED,
+        },
+        SessionStatus.PAUSED: {
+            SessionStatus.IN_PROGRESS,
+            SessionStatus.COMPLETED,
+            SessionStatus.CANCELLED,
+        },
     }
     assert SessionStatus.NO_SHOW in allowed[SessionStatus.SCHEDULED]
-    assert SessionStatus.COMPLETED in allowed[SessionStatus.IN_PROGRESS]
+    assert SessionStatus.PAUSED in allowed[SessionStatus.IN_PROGRESS]
+    assert SessionStatus.IN_PROGRESS in allowed[SessionStatus.PAUSED]
 
 
 def test_onboarded_user_defaults_to_owner_permissions():

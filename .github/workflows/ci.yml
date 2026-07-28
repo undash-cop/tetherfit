@@ -28,7 +28,8 @@ jobs:
       - name: Test
         run: pytest -q
       - name: Docker build
-        run: docker build -t tetherfit-api:ci .
+        working-directory: ${{ github.workspace }}
+        run: docker build -t tetherfit-api:ci -f Dockerfile .
 
   web:
     name: Web
@@ -57,3 +58,52 @@ jobs:
           VITE_API_URL: http://localhost:8000
       - name: Docker build
         run: docker build -t tetherfit-web:ci .
+        # Optional local/CI image only — production web is Netlify, not VPS
+
+  e2e:
+    name: Playwright smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install API
+        working-directory: apps/api
+        run: |
+          python -m pip install -U pip
+          pip install -e "."
+      - name: Start API
+        working-directory: apps/api
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8000/health && break
+            sleep 1
+          done
+        env:
+          APP_ENV: test
+          DATABASE_URL: postgresql+asyncpg://user:password@127.0.0.1:5432/tetherfit
+          REDIS_URL: redis://127.0.0.1:6379/0
+      - name: Install web
+        working-directory: apps/web
+        run: npm ci
+      - name: Build web
+        working-directory: apps/web
+        run: npm run build
+        env:
+          VITE_API_URL: http://127.0.0.1:8000
+      - name: Install Playwright Chromium
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+      - name: Smoke e2e
+        working-directory: apps/web
+        run: npm run test:e2e
+        env:
+          PLAYWRIGHT_API_URL: http://127.0.0.1:8000
+          CI: "true"

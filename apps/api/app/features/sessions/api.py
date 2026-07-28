@@ -85,6 +85,26 @@ async def start_session(
     return await SessionService(db).start(org_id(principal), session_id)
 
 
+@router.post("/sessions/{session_id}/pause", response_model=SessionOut)
+async def pause_session(
+    session_id: UUID,
+    principal: AuthPrincipal = Depends(require_permission("session:start")),
+    _: AuthPrincipal = Depends(require_organization),
+    db: AsyncSession = Depends(get_db),
+) -> SessionOut:
+    return await SessionService(db).pause(org_id(principal), session_id)
+
+
+@router.post("/sessions/{session_id}/resume", response_model=SessionOut)
+async def resume_session(
+    session_id: UUID,
+    principal: AuthPrincipal = Depends(require_permission("session:start")),
+    _: AuthPrincipal = Depends(require_organization),
+    db: AsyncSession = Depends(get_db),
+) -> SessionOut:
+    return await SessionService(db).resume(org_id(principal), session_id)
+
+
 @router.post("/sessions/{session_id}/finish", response_model=SessionOut)
 async def finish_session(
     session_id: UUID,

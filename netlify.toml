@@ -1,0 +1,22 @@
+# TetherFit web — Netlify
+# API is on UDC VPS: https://api.tetherfit.undash-cop.com (not in this build)
+
+[build]
+  base = "apps/web"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# SPA fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Set in Netlify UI (build-time Vite env):
+#   VITE_API_URL=https://api.tetherfit.undash-cop.com
+#   VITE_KEYCLOAK_URL=https://secure.undash-cop.com
+#   VITE_KEYCLOAK_REALM=undash
+#   VITE_KEYCLOAK_CLIENT_ID=tetherfit-web

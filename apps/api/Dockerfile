@@ -1,3 +1,6 @@
+# Prefer the monorepo-root Dockerfile (UDC contract).
+# This file remains for local `cd apps/api && docker build` only.
+
 FROM python:3.13-slim
 
 WORKDIR /app
@@ -7,6 +10,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    curl \
+    ca-certificates \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 

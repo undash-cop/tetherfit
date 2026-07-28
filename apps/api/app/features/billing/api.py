@@ -1,15 +1,18 @@
+import json
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import AuthPrincipal, org_id, require_organization, require_permission
 from app.domain.models import Client, Invoice, InvoiceStatus, Payment, PaymentStatus
 from app.infrastructure.payments import get_payment_provider
+from app.infrastructure.razorpay_webhook import verify_razorpay_webhook_signature
 
 router = APIRouter(prefix="/api/v1", tags=["billing"])
 
@@ -228,6 +231,65 @@ async def confirm_payment(
     await db.flush()
     await db.refresh(payment)
     return PaymentOut.model_validate(payment)
+
+
+@router.post("/payments/webhook/razorpay")
+async def razorpay_webhook(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    x_razorpay_signature: str | None = Header(default=None, alias="X-Razorpay-Signature"),
+) -> dict:
+    """Public Razorpay webhook — signature verified; rate-limited by IP middleware."""
+    raw = await request.body()
+    settings = get_settings()
+    secret = settings.razorpay_webhook_secret
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Webhook secret not configured",
+        )
+    if not x_razorpay_signature or not verify_razorpay_webhook_signature(
+        raw, x_razorpay_signature, secret
+    ):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid signature")
+
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON") from exc
+
+    event = payload.get("event")
+    if event != "payment.captured":
+        return {"status": "ignored", "event": event}
+
+    entity = (payload.get("payload") or {}).get("payment", {}).get("entity") or {}
+    order_id = entity.get("order_id")
+    payment_id = entity.get("id")
+    method = entity.get("method")
+    if not order_id:
+        return {"status": "ignored", "reason": "missing_order_id"}
+
+    payment = await db.scalar(
+        select(Payment).where(
+            Payment.provider_order_id == order_id,
+            Payment.deleted_at.is_(None),
+        )
+    )
+    if not payment:
+        return {"status": "ignored", "reason": "payment_not_found"}
+    if payment.status == PaymentStatus.SUCCESS:
+        return {"status": "ok", "idempotent": True}
+
+    payment.status = PaymentStatus.SUCCESS
+    payment.provider_payment_id = payment_id or payment.provider_payment_id
+    payment.method = method or payment.method
+    payment.raw_payload = payload
+    if payment.invoice_id:
+        invoice = await db.scalar(select(Invoice).where(Invoice.id == payment.invoice_id))
+        if invoice:
+            invoice.status = InvoiceStatus.PAID
+    await db.commit()
+    return {"status": "ok", "payment_id": str(payment.id)}
 
 
 class RefundBody(BaseModel):

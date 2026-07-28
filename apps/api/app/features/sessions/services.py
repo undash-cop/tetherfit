@@ -158,6 +158,24 @@ class SessionService:
         await self.db.flush()
         return await self.get(organization_id, session_id)
 
+    async def pause(self, organization_id: UUID, session_id: UUID) -> SessionOut:
+        session = await self._load(organization_id, session_id)
+        if session.status != SessionStatus.IN_PROGRESS:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Invalid transition")
+        session.status = SessionStatus.PAUSED
+        session.paused_at = datetime.now(UTC)
+        await self.db.flush()
+        return await self.get(organization_id, session_id)
+
+    async def resume(self, organization_id: UUID, session_id: UUID) -> SessionOut:
+        session = await self._load(organization_id, session_id)
+        if session.status != SessionStatus.PAUSED:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Invalid transition")
+        session.status = SessionStatus.IN_PROGRESS
+        session.paused_at = None
+        await self.db.flush()
+        return await self.get(organization_id, session_id)
+
     async def finish(
         self, organization_id: UUID, session_id: UUID, body: FinishSessionBody | None = None
     ) -> SessionOut:
@@ -166,6 +184,7 @@ class SessionService:
             SessionStatus.SCHEDULED,
             SessionStatus.CHECKED_IN,
             SessionStatus.IN_PROGRESS,
+            SessionStatus.PAUSED,
         }:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Invalid transition")
         session.status = SessionStatus.COMPLETED

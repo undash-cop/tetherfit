@@ -75,6 +75,12 @@ export function useCheckInSession() {
 export function useStartSession() {
   return useSessionAction("start");
 }
+export function usePauseSession() {
+  return useSessionAction("pause");
+}
+export function useResumeSession() {
+  return useSessionAction("resume");
+}
 export function useFinishSession() {
   return useSessionAction("finish");
 }
@@ -84,6 +90,23 @@ export function useCancelSession() {
 
 export function useNoShowSession() {
   return useSessionAction("no-show");
+}
+
+export function useRescheduleSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { id: string; starts_at: string; ends_at: string }) =>
+      apiFetch<PtSession>(`/api/v1/sessions/${body.id}`, {
+        method: "PATCH",
+        token: getToken(),
+        body: JSON.stringify({ starts_at: body.starts_at, ends_at: body.ends_at }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["calendar"] });
+      void qc.invalidateQueries({ queryKey: ["sessions"] });
+      void qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
 }
 
 export function useClientSessions(clientId: string | undefined) {

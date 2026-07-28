@@ -22,11 +22,15 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
 
+    # Internal Keycloak base for JWKS/discovery (UDC Docker: http://keycloak:8080)
     keycloak_server_url: str = "https://keycloak.example.com"
     keycloak_realm: str = "undash"
     keycloak_client_id: str = "tetherfit-web"
     keycloak_audience: str = "tetherfit-api"
     keycloak_client_secret: str | None = None
+    # Public JWT iss claim (UDC: UDC_JWT_ISSUER). Tokens use the public HTTPS issuer
+    # even when KEYCLOAK_SERVER_URL is the internal Docker hostname.
+    udc_jwt_issuer: str = ""
 
     r2_account_id: str = ""
     r2_access_key_id: str = ""
@@ -38,6 +42,13 @@ class Settings(BaseSettings):
     razorpay_key_id: str = ""
     razorpay_key_secret: str = ""
     razorpay_webhook_secret: str = ""
+
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_use_tls: bool = True
 
     ai_provider: str = "noop"
     ai_api_key: str = ""
@@ -55,11 +66,15 @@ class Settings(BaseSettings):
 
     @property
     def keycloak_issuer(self) -> str:
+        if self.udc_jwt_issuer.strip():
+            return self.udc_jwt_issuer.rstrip("/")
         return f"{self.keycloak_server_url.rstrip('/')}/realms/{self.keycloak_realm}"
 
     @property
     def keycloak_jwks_url(self) -> str:
-        return f"{self.keycloak_issuer}/protocol/openid-connect/certs"
+        # Always fetch JWKS from KEYCLOAK_SERVER_URL (internal on UDC), not public issuer
+        base = self.keycloak_server_url.rstrip("/")
+        return f"{base}/realms/{self.keycloak_realm}/protocol/openid-connect/certs"
 
 
 @lru_cache

@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 
@@ -9,15 +9,45 @@ import { useClientSessions } from "@/hooks/useSessions";
 import { apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth/keycloak";
 
+type Assessment = {
+  id: string;
+  recorded_at: string;
+  weight_kg: number | null;
+  height_cm: number | null;
+  bmi: number | null;
+  photo_urls: string[];
+};
+
+type Presign = {
+  asset_id: string;
+  upload_url: string;
+  public_url: string | null;
+  headers: Record<string, string>;
+  object_key: string;
+};
+
 export function ClientDetailPage() {
   const { id } = useParams();
   const client = useClient(id);
   const packages = useClientPackages(id);
   const history = useClientSessions(id);
   const createPkg = useCreatePackage(id!);
+  const qc = useQueryClient();
   const [sessions, setSessions] = useState(10);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
-  const [tab, setTab] = useState<"overview" | "credits" | "sessions" | "notes">("overview");
+  const [weight, setWeight] = useState(70);
+  const [height, setHeight] = useState(170);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [tab, setTab] = useState<
+    "overview" | "credits" | "sessions" | "assessments" | "notes"
+  >("overview");
+
+  const assessments = useQuery({
+    queryKey: ["assessments", id],
+    queryFn: () =>
+      apiFetch<Assessment[]>(`/api/v1/assessments?client_id=${id}`, { token: getToken() }),
+    enabled: Boolean(id),
+  });
 
   const invitePortal = useMutation({
     mutationFn: () =>
@@ -35,6 +65,51 @@ export function ClientDetailPage() {
         method: "POST",
         token: getToken(),
       }),
+  });
+
+  const addAssessment = useMutation({
+    mutationFn: async () => {
+      const photoUrls: string[] = [];
+      if (photoFile) {
+        const presign = await apiFetch<Presign>("/api/v1/media/presign", {
+          method: "POST",
+          token: getToken(),
+          body: JSON.stringify({
+            filename: photoFile.name,
+            content_type: photoFile.type || "image/jpeg",
+            kind: "transformation",
+            client_id: id,
+            size_bytes: photoFile.size,
+          }),
+        });
+        if (presign.upload_url.startsWith("http")) {
+          await fetch(presign.upload_url, {
+            method: "PUT",
+            headers: presign.headers,
+            body: photoFile,
+          });
+        }
+        photoUrls.push(
+          presign.public_url || `https://media.local/${presign.object_key}`,
+        );
+      }
+      return apiFetch("/api/v1/assessments", {
+        method: "POST",
+        token: getToken(),
+        body: JSON.stringify({
+          client_id: id,
+          recorded_at: new Date().toISOString(),
+          weight_kg: weight,
+          height_cm: height,
+          photo_urls: photoUrls,
+          measurements: {},
+        }),
+      });
+    },
+    onSuccess: () => {
+      setPhotoFile(null);
+      void qc.invalidateQueries({ queryKey: ["assessments", id] });
+    },
   });
 
   if (client.isLoading) return <p>Loading…</p>;
@@ -60,7 +135,7 @@ export function ClientDetailPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(["overview", "credits", "sessions", "notes"] as const).map((t) => (
+        {(["overview", "credits", "sessions", "assessments", "notes"] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -87,10 +162,6 @@ export function ClientDetailPage() {
           <p>
             <span className="text-slate dark:text-sand/60">Goals:</span> {c.goals || "—"}
           </p>
-          <p>
-            <span className="text-slate dark:text-sand/60">Emergency:</span>{" "}
-            {c.emergency_contact_name || "—"} {c.emergency_contact_phone || ""}
-          </p>
           <Link to={`/app/calendar?book=1&client=${c.id}`}>
             <Button className="mt-2 w-full">Book session</Button>
           </Link>
@@ -107,11 +178,7 @@ export function ClientDetailPage() {
               Invite token: {inviteToken}
             </p>
           )}
-          <Button
-            className="w-full"
-            variant="outline"
-            onClick={() => openChat.mutate()}
-          >
+          <Button className="w-full" variant="outline" onClick={() => openChat.mutate()}>
             Open chat thread
           </Button>
           <Link to="/app/chat">
@@ -133,7 +200,6 @@ export function ClientDetailPage() {
                 <p className="font-semibold">
                   {p.remaining_sessions} / {p.total_sessions} remaining
                 </p>
-                <p className="text-xs text-slate dark:text-sand/60">{p.notes || "Session pack"}</p>
               </li>
             ))}
           </ul>
@@ -159,34 +225,85 @@ export function ClientDetailPage() {
 
       {tab === "sessions" && (
         <ul className="space-y-2">
-          {(history.data ?? []).length === 0 && (
-            <p className="text-sm text-slate dark:text-sand/60">No sessions yet.</p>
-          )}
           {(history.data ?? []).map((s) => (
             <li key={s.id}>
               <Link
                 to={`/app/sessions/${s.id}`}
                 className="flex justify-between rounded-2xl border border-forest/10 bg-white/70 px-4 py-3 dark:border-sand/10 dark:bg-white/5"
               >
-                <div>
-                  <p className="font-semibold">
-                    {new Date(s.starts_at).toLocaleString([], {
-                      month: "short",
-                      day: "numeric",
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                  <p className="text-xs text-slate dark:text-sand/60">
-                    {s.status.replace("_", " ")}
-                    {s.credit_deducted ? " · credit used" : ""}
-                  </p>
-                </div>
-                <span className="text-sm text-moss dark:text-lime">Open</span>
+                <span>
+                  {new Date(s.starts_at).toLocaleString([], {
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </span>
+                <Badge>{s.status}</Badge>
               </Link>
             </li>
           ))}
         </ul>
+      )}
+
+      {tab === "assessments" && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label>Weight (kg)</Label>
+              <Input
+                type="number"
+                value={weight}
+                onChange={(e) => setWeight(Number(e.target.value))}
+              />
+            </div>
+            <div>
+              <Label>Height (cm)</Label>
+              <Input
+                type="number"
+                value={height}
+                onChange={(e) => setHeight(Number(e.target.value))}
+              />
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="photo">Transformation photo</Label>
+            <Input
+              id="photo"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
+          <Button disabled={addAssessment.isPending} onClick={() => addAssessment.mutate()}>
+            Log assessment
+          </Button>
+          <ul className="space-y-2">
+            {(assessments.data ?? []).map((a) => (
+              <li
+                key={a.id}
+                className="rounded-2xl border border-forest/10 px-4 py-3 dark:border-sand/10"
+              >
+                <p className="font-semibold">{new Date(a.recorded_at).toLocaleDateString()}</p>
+                <p className="text-sm text-slate dark:text-sand/60">
+                  {a.weight_kg ?? "—"} kg · BMI {a.bmi ?? "—"}
+                </p>
+                {a.photo_urls?.length > 0 && (
+                  <div className="mt-2 flex gap-2 overflow-x-auto">
+                    {a.photo_urls.map((url) => (
+                      <img
+                        key={url}
+                        src={url}
+                        alt="Progress"
+                        className="h-20 w-20 rounded-xl object-cover"
+                      />
+                    ))}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {tab === "notes" && (

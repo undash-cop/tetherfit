@@ -126,6 +126,7 @@ class SessionStatus(StrEnum):
     SCHEDULED = "scheduled"
     CHECKED_IN = "checked_in"
     IN_PROGRESS = "in_progress"
+    PAUSED = "paused"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
     NO_SHOW = "no_show"
@@ -193,6 +194,7 @@ class PtSession(UUIDPrimaryKeyMixin, TimestampMixin, AuditMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     check_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
     package_id: Mapped[UUID | None] = mapped_column(

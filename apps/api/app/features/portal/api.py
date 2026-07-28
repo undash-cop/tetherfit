@@ -291,16 +291,23 @@ async def portal_progress(
         .order_by(Assessment.recorded_at.desc())
         .limit(40)
     )
-    return [
-        {
-            "id": str(a.id),
-            "recorded_at": a.recorded_at.isoformat(),
-            "weight_kg": a.weight_kg,
-            "bmi": a.bmi,
-            "body_fat_pct": a.body_fat_pct,
-        }
-        for a in rows
-    ]
+    out: list[dict] = []
+    for a in rows:
+        bmi = None
+        if a.weight_kg and a.height_cm and a.height_cm > 0:
+            meters = a.height_cm / 100
+            bmi = round(a.weight_kg / (meters * meters), 1)
+        out.append(
+            {
+                "id": str(a.id),
+                "recorded_at": a.recorded_at.isoformat(),
+                "weight_kg": a.weight_kg,
+                "bmi": bmi,
+                "body_fat_pct": a.body_fat_pct,
+                "photo_urls": list(a.photo_urls or []),
+            }
+        )
+    return out
 
 
 @router.get("/portal/payments")

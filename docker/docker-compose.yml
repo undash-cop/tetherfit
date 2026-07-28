@@ -1,7 +1,10 @@
+# Local / laptop only — API container.
+# Production: udc-infra (VPS) + Netlify (frontend). Do not deploy this web image to the VPS.
+
 services:
   api:
     build:
-      context: ../apps/api
+      context: ..
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
@@ -10,29 +13,30 @@ services:
     environment:
       API_HOST: 0.0.0.0
       API_PORT: 8000
-    # labels:
-    #   - "traefik.enable=true"
-    #   - "traefik.http.routers.tetherfit-api.rule=Host(`api.tetherfit.localhost`)"
+      # Override for Docker Desktop talking to host Undash services if needed
+      # KEYCLOAK_SERVER_URL: http://host.docker.internal:8080
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
 
-  web:
+  # Optional local Celery (needs Redis + DATABASE_URL)
+  worker:
+    profiles: ["worker"]
     build:
-      context: ../apps/web
+      context: ..
       dockerfile: Dockerfile
-      args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
-        VITE_KEYCLOAK_URL: ${VITE_KEYCLOAK_URL}
-        VITE_KEYCLOAK_REALM: ${VITE_KEYCLOAK_REALM}
-        VITE_KEYCLOAK_CLIENT_ID: ${VITE_KEYCLOAK_CLIENT_ID}
-    ports:
-      - "5173:80"
+    command: ["worker"]
+    env_file:
+      - ../.env
     depends_on:
       - api
-    # labels:
-    #   - "traefik.enable=true"
-    #   - "traefik.http.routers.tetherfit-web.rule=Host(`tetherfit.localhost`)"
 
-# External Undash-Cop services (not started here):
+# External Undash-Cop / UDC services (not started here):
 # - PostgreSQL  → DATABASE_URL
-# - Redis       → REDIS_URL / CELERY_* 
-# - Keycloak    → KEYCLOAK_* / VITE_KEYCLOAK_*
+# - Redis       → REDIS_URL / CELERY_*
+# - Keycloak    → KEYCLOAK_* / UDC_JWT_ISSUER
 # - Cloudflare R2 → R2_*
+# Frontend → Netlify (or npm run dev locally)

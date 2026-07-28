@@ -8,6 +8,7 @@ type Assessment = {
   recorded_at: string;
   weight_kg: number | null;
   bmi: number | null;
+  photo_urls: string[];
 };
 
 export function ClientProgressPage() {
@@ -29,6 +30,18 @@ export function ClientProgressPage() {
             <p className="text-sm text-slate dark:text-sand/60">
               {a.weight_kg ?? "—"} kg · BMI {a.bmi ?? "—"}
             </p>
+            {a.photo_urls?.length > 0 && (
+              <div className="mt-2 flex gap-2 overflow-x-auto">
+                {a.photo_urls.map((url) => (
+                  <img
+                    key={url}
+                    src={url}
+                    alt="Progress photo"
+                    className="h-24 w-24 rounded-xl object-cover"
+                  />
+                ))}
+              </div>
+            )}
           </li>
         ))}
         {!data?.length && <p className="text-sm text-slate">No assessments yet.</p>}

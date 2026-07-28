@@ -40,7 +40,7 @@ npm install
 npm run dev
 ```
 
-Or with Docker Compose (api + web only):
+Or with Docker Compose (**API only** for local; web is Netlify / `npm run dev`):
 
 ```bash
 docker compose -f docker/docker-compose.yml up --build
@@ -51,11 +51,14 @@ docker compose -f docker/docker-compose.yml up --build
 - [Architecture](docs/architecture.md)
 - [Environment variables](docs/environment.md)
 - [Developer onboarding](docs/onboarding.md)
-- [Deployment](docs/deployment.md)
+- [Deployment](docs/deployment.md) (VPS API via udc-infra + Netlify web)
+- [UDC deploy](docs/udc-deployment.md)
 
 ## Phase status
 
-**Phase 5 – Polish & Growth** (current): recurring sessions, availability, realtime chat, push, automations, refunds/memberships, metrics, k8s.
+**Phase 6 – Production Completeness** (current): session pause/resume, calendar DnD, R2 transformation photos, SMTP email, Razorpay webhook, seed + Playwright smoke. API `0.7.0` / migration `0007_phase6`.
+
+**Phase 5 – Polish & Growth**: recurring sessions, availability, realtime chat, push, automations, refunds/memberships, metrics, k8s.
 
 **Phase 4 – Client Portal & Platform**: client PWA, chat, platform admin, R2 media, Celery reminders, rate limits.
 

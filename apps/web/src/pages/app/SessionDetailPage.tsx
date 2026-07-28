@@ -8,6 +8,8 @@ import {
   useCheckInSession,
   useFinishSession,
   useNoShowSession,
+  usePauseSession,
+  useResumeSession,
   useSession,
   useStartSession,
 } from "@/hooks/useSessions";
@@ -17,6 +19,8 @@ export function SessionDetailPage() {
   const session = useSession(id);
   const checkIn = useCheckInSession();
   const start = useStartSession();
+  const pause = usePauseSession();
+  const resume = useResumeSession();
   const finish = useFinishSession();
   const cancel = useCancelSession();
   const noShow = useNoShowSession();
@@ -29,6 +33,11 @@ export function SessionDetailPage() {
   const s = session.data;
   const closed =
     s.status === "completed" || s.status === "cancelled" || s.status === "no_show";
+  const canFinish =
+    s.status === "scheduled" ||
+    s.status === "checked_in" ||
+    s.status === "in_progress" ||
+    s.status === "paused";
 
   return (
     <section className="space-y-4">
@@ -72,9 +81,27 @@ export function SessionDetailPage() {
               Start session
             </Button>
           )}
-          {(s.status === "scheduled" ||
-            s.status === "checked_in" ||
-            s.status === "in_progress") && (
+          {s.status === "in_progress" && (
+            <Button
+              className="w-full"
+              variant="outline"
+              disabled={pause.isPending}
+              onClick={() => pause.mutate({ id: s.id })}
+            >
+              Pause
+            </Button>
+          )}
+          {s.status === "paused" && (
+            <Button
+              className="w-full"
+              variant="secondary"
+              disabled={resume.isPending}
+              onClick={() => resume.mutate({ id: s.id })}
+            >
+              Resume
+            </Button>
+          )}
+          {canFinish && (
             <>
               <Textarea
                 placeholder="Session notes"

@@ -1,3 +1,6 @@
+# LEGACY / reference only — production is udc-infra Compose on the VPS + Netlify for web.
+# Prefer docs/udc-deployment.md and docs/deployment.md.
+---
 # API Deployment
 apiVersion: apps/v1
 kind: Deployment

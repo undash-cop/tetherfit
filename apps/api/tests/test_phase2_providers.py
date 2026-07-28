@@ -21,3 +21,14 @@ def test_notification_noop_sends():
         NotificationMessage(channel="email", recipient="a@b.com", subject="Hi", body="Hello")
     )
     assert status == "sent"
+    assert provider.name in {"noop", "smtp"}
+
+
+def test_smtp_provider_selected_when_host_set():
+    from app.core.config import Settings
+    from app.infrastructure.notifications import SmtpEmailProvider, get_notification_provider
+
+    settings = Settings(smtp_host="smtp.example.com", smtp_port=587)
+    provider = get_notification_provider(settings)
+    assert isinstance(provider, SmtpEmailProvider)
+    assert provider.name == "smtp"

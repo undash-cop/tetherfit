@@ -1,51 +1,84 @@
 # Deployment
 
-## Containers
+## Target topology
 
-- `apps/api/Dockerfile` — Uvicorn on port 8000
-- `apps/web/Dockerfile` — multi-stage Vite build + Nginx
+| Surface | Where | How |
+|---------|--------|-----|
+| **API** | UDC VPS (`udc-infra`) | Docker → nginx TLS → `https://api.tetherfit.undash-cop.com` |
+| **Celery** | Same VPS | `udc-tetherfit-worker` (same image, `worker` command) |
+| **Web** | **Netlify** | Vite static build (`netlify.toml`) |
 
-Orchestrate with `docker/docker-compose.yml` for simple environments, or Kubernetes with Traefik ingress (labels commented in Compose).
+Do **not** deploy the web Docker image to the VPS. Local `docker/docker-compose.yml` is API-only.
 
-## Suggested hosts
+## UDC (VPS) — API
 
-| Host | Service |
-|------|---------|
-| `app.tetherfit…` or apex | `apps/web` |
-| `api.tetherfit…` | `apps/api` |
+Follow the [udc-infra](https://github.com/undash-cop/udc-infra) app Docker contract (`docs/app-docker-contract.md` in that repo):
 
-## Runtime config
+1. Repo-root **`Dockerfile`** builds the API from `apps/api` (curl + migrate entrypoint).
+2. Registered as service **`tetherfit`** in `udc-infra/configs/deploy/apps.json`.
+3. Env template: `udc-infra/configs/env/templates/apps.tetherfit.env.example` → `apps.tetherfit.env`.
+4. Create DB `tetherfit` (init script `postgres/init/04-tetherfit-db.sh`, or `CREATE DATABASE` once).
+5. DNS + TLS for `api.tetherfit.undash-cop.com`, then:
 
-Inject secrets via environment / secret store — never bake Keycloak, DB, Redis, or R2 credentials into images.
+```bash
+cd /opt/udc/udc-infra
+./scripts/init-env.sh   # if apps.tetherfit.env missing
+# Edit configs/env/apps.tetherfit.env
+./scripts/issue-tls-certs-data.sh
+./scripts/deploy-apps.sh --only tetherfit
+# Celery (not routed by nginx):
+docker compose -f docker/docker-compose.apps.phase.yml up -d tetherfit-worker
+```
+
+Verify:
+
+```bash
+docker exec udc-tetherfit curl -fsS http://127.0.0.1:8000/health
+curl -fsS https://api.tetherfit.undash-cop.com/health
+```
+
+### Critical UDC env
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | `postgresql+asyncpg://…@postgres:5432/tetherfit` |
+| `KEYCLOAK_SERVER_URL` | Internal `http://keycloak:8080` (from `global.env`) |
+| `UDC_JWT_ISSUER` | Public `https://secure.undash-cop.com/realms/<realm>` |
+| `CORS_ORIGINS` | Netlify production (+ preview) origins |
+| `REDIS_URL` / `CELERY_*` | Redis with password on `udc-network` |
+
+## Netlify — frontend
+
+- Config: root [`netlify.toml`](../netlify.toml) (`base = apps/web`).
+- Build env: `VITE_API_URL`, `VITE_KEYCLOAK_*`.
+- Keycloak: add Netlify origin + `/auth/callback` redirect URIs.
+
+## Local development
+
+```bash
+# API (repo root)
+docker compose -f docker/docker-compose.yml up --build
+# or uvicorn from apps/api
+
+# Web
+cd apps/web && npm run dev
+```
+
+Optional Celery locally: `docker compose -f docker/docker-compose.yml --profile worker up`.
 
 ## Migrations
 
-Run `alembic upgrade head` as a release job before rolling new API pods.
-
-## Health
-
-`GET /health` reports database (required), Redis, and R2 status.
-
-Responses include `X-Request-ID` and `X-Response-Time-ms`. API rate limit defaults to 180 requests/minute/IP.
-
-## Workers
+On UDC, the API entrypoint runs `alembic upgrade head` before uvicorn. For one-shot:
 
 ```bash
-cd apps/api
-celery -A app.infrastructure.celery_app.celery_app worker -B -l info
+docker exec udc-tetherfit alembic upgrade head
 ```
 
-Beat schedule runs `tetherfit.session_reminders` hourly (notify sessions starting within 2 hours).
+## Health / metrics
 
-## Kubernetes readiness
+- `GET /health` — DB required for `"status":"ok"`
+- `GET /metrics` — Prometheus (scraped when `metrics_scrape: true`)
 
-Manifests live in [`infrastructure/k8s/tetherfit.yaml`](../infrastructure/k8s/tetherfit.yaml):
+## Legacy
 
-- `tetherfit-api` Deployment (migrate initContainer + readiness/liveness)
-- `tetherfit-web` Deployment
-- `tetherfit-worker` Celery worker+beat
-- Services for api/web
-
-Create a `tetherfit-secrets` Secret with Undash-Cop env vars before apply.
-
-Prometheus scrape `GET /metrics` on the API service.
+`infrastructure/k8s/` is reference-only; production path is **udc-infra Compose on the VPS**, not Kubernetes.

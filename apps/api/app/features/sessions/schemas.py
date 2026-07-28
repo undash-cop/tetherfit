@@ -40,6 +40,7 @@ class SessionOut(BaseModel):
     notes: str | None
     check_in_at: datetime | None
     started_at: datetime | None
+    paused_at: datetime | None = None
     finished_at: datetime | None
     rating: int | None
     package_id: UUID | None
