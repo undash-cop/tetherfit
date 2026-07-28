@@ -22,27 +22,38 @@ export async function initKeycloak(): Promise<boolean> {
     return false;
   }
   if (!initPromise) {
-    initPromise = keycloak.init({
-      onLoad: "check-sso",
-      pkceMethod: "S256",
-      checkLoginIframe: false,
-      silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,
-    });
+    // Do not use silentCheckSso / login iframes: Keycloak serves
+    // X-Frame-Options: sameorigin, so localhost cannot embed secure.undash-cop.com.
+    // Init still completes PKCE code exchange when returning from login redirect.
+    initPromise = keycloak
+      .init({
+        pkceMethod: "S256",
+        checkLoginIframe: false,
+      })
+      .catch((err: unknown) => {
+        // Allow a later retry if the first init fails (e.g. network blip).
+        initPromise = null;
+        throw err;
+      });
   }
   return initPromise;
 }
 
-export async function login() {
+export async function login(redirectPath = "/app") {
   if (!keycloak) {
     throw new Error("Keycloak is not configured. Set VITE_KEYCLOAK_* env vars.");
   }
+  // Adapter methods (login/logout) exist only after init completes.
+  await initKeycloak();
+  const path = redirectPath.startsWith("/") ? redirectPath : `/${redirectPath}`;
   await keycloak.login({
-    redirectUri: `${window.location.origin}/auth/callback`,
+    redirectUri: `${window.location.origin}${path}`,
   });
 }
 
 export async function logout() {
   if (!keycloak) return;
+  await initKeycloak();
   await keycloak.logout({ redirectUri: `${window.location.origin}/` });
 }
 

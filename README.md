@@ -52,6 +52,7 @@ docker compose -f docker/docker-compose.yml up --build
 - [Environment variables](docs/environment.md)
 - [Developer onboarding](docs/onboarding.md)
 - [Deployment](docs/deployment.md) (VPS API via udc-infra + Netlify web)
+- [Netlify frontend](docs/netlify.md)
 - [UDC deploy](docs/udc-deployment.md)
 
 ## Phase status

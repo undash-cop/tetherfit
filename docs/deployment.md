@@ -47,9 +47,11 @@ curl -fsS https://api.tetherfit.undash-cop.com/health
 
 ## Netlify — frontend
 
-- Config: root [`netlify.toml`](../netlify.toml) (`base = apps/web`).
-- Build env: `VITE_API_URL`, `VITE_KEYCLOAK_*`.
-- Keycloak: add Netlify origin + `/auth/callback` redirect URIs.
+See **[netlify.md](./netlify.md)** for the full checklist.
+
+- Config: root [`netlify.toml`](../netlify.toml) (`base = apps/web`, Vite build → `dist`)
+- Build env baked in `netlify.toml`: `VITE_API_URL`, `VITE_KEYCLOAK_*` (realm `tetherfit`)
+- After first deploy: add the Netlify origin to Keycloak redirects/web origins and API `CORS_ORIGINS`
 
 ## Local development
 

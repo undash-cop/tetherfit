@@ -1,20 +1,29 @@
 # TetherFit Web
 
-React 19 + Vite PWA with public marketing routes and authenticated `/app` shell.
+React 19 + Vite PWA. Production host: **Netlify** (see [`docs/netlify.md`](../../docs/netlify.md)).
 
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 npm install
 npm run dev
+```
+
+## Production build (same as Netlify)
+
+```bash
+npm ci
+npm run typecheck
+npm run build
+npm run preview
 ```
 
 ## Routes
 
 | Path | Access |
 |------|--------|
-| `/`, `/features`, `/pricing`, `/contact` | Public |
-| `/login`, `/auth/callback` | Auth |
-| `/app/*` | Authenticated (Keycloak) |
+| `/`, `/features`, `/pricing`, `/contact`, `/marketplace` | Public |
+| `/login` | Starts Keycloak (redirects to `/app`) |
+| `/app/*`, `/client/*`, `/admin/*` | Authenticated (Keycloak) |
 
 ## Playwright smoke
 
@@ -25,5 +34,3 @@ npm run test:e2e
 ```
 
 CI runs public routes (`/`, `/features`, `/marketplace`) plus API `/health` — no Keycloak.
-
-**Local authenticated calendar:** seed with `python scripts/seed_demo.py`, sign in, open `/app/calendar`, drag session chips on day/week views.

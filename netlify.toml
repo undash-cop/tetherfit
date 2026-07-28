@@ -1,5 +1,5 @@
 # TetherFit web — Netlify
-# API is on UDC VPS: https://api.tetherfit.undash-cop.com (not in this build)
+# API lives on UDC VPS: https://api.tetherfit.undash-cop.com
 
 [build]
   base = "apps/web"
@@ -8,15 +8,30 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  # Public client-side config (safe to bake into the SPA). Override in Netlify UI for previews if needed.
+  VITE_API_URL = "https://api.tetherfit.undash-cop.com"
+  VITE_KEYCLOAK_URL = "https://secure.undash-cop.com"
+  VITE_KEYCLOAK_REALM = "tetherfit"
+  VITE_KEYCLOAK_CLIENT_ID = "tetherfit-web"
 
-# SPA fallback
+# SPA fallback (React Router)
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
-# Set in Netlify UI (build-time Vite env):
-#   VITE_API_URL=https://api.tetherfit.undash-cop.com
-#   VITE_KEYCLOAK_URL=https://secure.undash-cop.com
-#   VITE_KEYCLOAK_REALM=undash
-#   VITE_KEYCLOAK_CLIENT_ID=tetherfit-web
+# Cache hashed assets; keep HTML fresh
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

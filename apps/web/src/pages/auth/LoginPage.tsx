@@ -1,22 +1,31 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 
 import { login } from "@/lib/auth/keycloak";
 import { useAuthStore } from "@/stores/auth";
 
 export function LoginPage() {
+  const ready = useAuthStore((s) => s.ready);
   const authenticated = useAuthStore((s) => s.authenticated);
   const navigate = useNavigate();
+  const started = useRef(false);
 
   useEffect(() => {
+    if (!ready) return;
+
     if (authenticated) {
       void navigate("/app", { replace: true });
       return;
     }
-    void login().catch(() => {
-      // Config missing — stay on page with message
+
+    // Only kick off Keycloak once per mount to avoid redirect storms.
+    if (started.current) return;
+    started.current = true;
+
+    void login("/app").catch(() => {
+      started.current = false;
     });
-  }, [authenticated, navigate]);
+  }, [ready, authenticated, navigate]);
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-fog px-5 dark:bg-ink">
