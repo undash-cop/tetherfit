@@ -68,23 +68,44 @@ class ClientRepository:
         await self.db.flush()
 
     async def sessions_completed(self, organization_id: UUID, client_id: UUID) -> int:
-        total = await self.db.scalar(
-            select(func.count()).select_from(PtSession).where(
+        totals = await self.sessions_completed_map(organization_id, [client_id])
+        return totals.get(client_id, 0)
+
+    async def amount_paid_paise(self, organization_id: UUID, client_id: UUID) -> int:
+        totals = await self.amount_paid_map(organization_id, [client_id])
+        return totals.get(client_id, 0)
+
+    async def sessions_completed_map(
+        self, organization_id: UUID, client_ids: list[UUID]
+    ) -> dict[UUID, int]:
+        if not client_ids:
+            return {}
+        rows = await self.db.execute(
+            select(PtSession.client_id, func.count())
+            .where(
                 PtSession.organization_id == organization_id,
-                PtSession.client_id == client_id,
+                PtSession.client_id.in_(client_ids),
                 PtSession.deleted_at.is_(None),
                 PtSession.status == SessionStatus.COMPLETED,
             )
+            .group_by(PtSession.client_id)
         )
-        return int(total or 0)
+        return {row[0]: int(row[1]) for row in rows.all()}
 
-    async def amount_paid_paise(self, organization_id: UUID, client_id: UUID) -> int:
-        total = await self.db.scalar(
-            select(func.coalesce(func.sum(Invoice.total_paise), 0)).where(
+    async def amount_paid_map(
+        self, organization_id: UUID, client_ids: list[UUID]
+    ) -> dict[UUID, int]:
+        """Sum totals from PAID invoices only (payments collected)."""
+        if not client_ids:
+            return {}
+        rows = await self.db.execute(
+            select(Invoice.client_id, func.coalesce(func.sum(Invoice.total_paise), 0))
+            .where(
                 Invoice.organization_id == organization_id,
-                Invoice.client_id == client_id,
+                Invoice.client_id.in_(client_ids),
                 Invoice.deleted_at.is_(None),
                 Invoice.status == InvoiceStatus.PAID,
             )
+            .group_by(Invoice.client_id)
         )
-        return int(total or 0)
+        return {row[0]: int(row[1] or 0) for row in rows.all()}

@@ -4,10 +4,7 @@ import { Link, useParams, useSearchParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { Badge, Input, Label } from "@/components/ui/field";
-import {
-  useClient,
-  useUpdateClient,
-} from "@/hooks/useClients";
+import { useClient, useUpdateClient } from "@/hooks/useClients";
 import { useCancelSession, useClientSessions } from "@/hooks/useSessions";
 import { apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth/keycloak";
@@ -32,8 +29,18 @@ type Presign = {
 type Invoice = {
   id: string;
   invoice_number: string;
+  client_id: string;
   status: string;
   total_paise: number;
+  tax_paise?: number;
+  currency?: string;
+};
+
+type UpiQr = {
+  upi_vpa: string;
+  qr_image_url: string;
+  amount_paise: number;
+  invoice_number: string;
 };
 
 function formatMoney(paise: number) {
@@ -49,6 +56,41 @@ function formatDate(value: string | null | undefined) {
   return new Date(value).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
 }
 
+function ptValidityLabel(code: string | undefined) {
+  switch (code) {
+    case "active":
+      return "Active";
+    case "upcoming":
+      return "Upcoming";
+    case "expired":
+      return "Expired";
+    default:
+      return "Not set";
+  }
+}
+
+function ptValidityDetail(
+  code: string | undefined,
+  start: string | null | undefined,
+  end: string | null | undefined,
+) {
+  if (code === "upcoming") return `Starts ${formatDate(start)}`;
+  if (code === "expired") return `Ended ${formatDate(end)}`;
+  if (code === "active") return `${formatDate(start)} → ${formatDate(end)}`;
+  return "Set PT start and end dates";
+}
+
+async function openGstInvoice(invoiceId: string) {
+  const base = import.meta.env.VITE_API_BASE_URL ?? "";
+  const res = await fetch(`${base}/api/v1/invoices/${invoiceId}/gst-invoice`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!res.ok) throw new Error("Could not open GST invoice");
+  const htmlDoc = await res.text();
+  const blob = new Blob([htmlDoc], { type: "text/html" });
+  window.open(URL.createObjectURL(blob), "_blank");
+}
+
 const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function ClientDetailPage() {
@@ -59,7 +101,7 @@ export function ClientDetailPage() {
   const updateClient = useUpdateClient(id!);
   const cancelSession = useCancelSession();
   const qc = useQueryClient();
-  const [inviteToken, setInviteToken] = useState<string | null>(null);
+
   const [weight, setWeight] = useState(70);
   const [height, setHeight] = useState(170);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -69,7 +111,12 @@ export function ClientDetailPage() {
   const [invoiceAmount, setInvoiceAmount] = useState(5000);
   const [ptStart, setPtStart] = useState("");
   const [ptEnd, setPtEnd] = useState("");
-  const [tab, setTab] = useState<"overview" | "sessions" | "assessments" | "notes">("overview");
+  const [lastInvoiceId, setLastInvoiceId] = useState<string | null>(null);
+  const [qr, setQr] = useState<UpiQr | null>(null);
+  const [qrInvoiceId, setQrInvoiceId] = useState<string | null>(null);
+  const [tab, setTab] = useState<"overview" | "payments" | "sessions" | "assessments" | "notes">(
+    "overview",
+  );
   const [focusPanel, setFocusPanel] = useState<"schedule" | "invoice" | null>(null);
 
   useEffect(() => {
@@ -78,12 +125,12 @@ export function ClientDetailPage() {
     if (tabParam === "sessions") {
       setTab("sessions");
       setFocusPanel(null);
+    } else if (tabParam === "payments" || action === "invoice") {
+      setTab("payments");
+      setFocusPanel(action === "invoice" ? "invoice" : null);
     } else if (action === "schedule") {
       setTab("overview");
       setFocusPanel("schedule");
-    } else if (action === "invoice") {
-      setTab("overview");
-      setFocusPanel("invoice");
     }
   }, [searchParams]);
 
@@ -100,23 +147,15 @@ export function ClientDetailPage() {
     enabled: Boolean(id),
   });
 
-  const invitePortal = useMutation({
-    mutationFn: () =>
-      apiFetch<{ token: string }>(`/api/v1/clients/${id}/portal-invite`, {
-        method: "POST",
-        token: getToken(),
-        body: JSON.stringify({}),
-      }),
-    onSuccess: (data) => setInviteToken(data.token),
+  const invoices = useQuery({
+    queryKey: ["invoices", "client", id],
+    queryFn: () =>
+      apiFetch<Invoice[]>(`/api/v1/invoices?client_id=${id}`, { token: getToken() }),
+    enabled: Boolean(id),
   });
 
-  const openChat = useMutation({
-    mutationFn: () =>
-      apiFetch<{ id: string }>(`/api/v1/chat/threads/${id}`, {
-        method: "POST",
-        token: getToken(),
-      }),
-  });
+  const clientInvoices = invoices.data ?? [];
+
 
   const scheduleSeries = useMutation({
     mutationFn: () =>
@@ -152,17 +191,65 @@ export function ClientDetailPage() {
           apply_default_gst: true,
         }),
       }),
-    onSuccess: async (inv) => {
+    onSuccess: (inv) => {
+      setLastInvoiceId(inv.id);
       void qc.invalidateQueries({ queryKey: ["invoices"] });
+      void qc.invalidateQueries({ queryKey: ["invoices", "client", id] });
+    },
+  });
+
+  const collectCash = useMutation({
+    mutationFn: (invoiceId: string) =>
+      apiFetch("/api/v1/payments/cash", {
+        method: "POST",
+        token: getToken(),
+        body: JSON.stringify({ invoice_id: invoiceId }),
+      }),
+    onSuccess: () => {
+      setQr(null);
+      setQrInvoiceId(null);
+      void qc.invalidateQueries({ queryKey: ["payments"] });
+      void qc.invalidateQueries({ queryKey: ["invoices"] });
+      void qc.invalidateQueries({ queryKey: ["invoices", "client", id] });
       void qc.invalidateQueries({ queryKey: ["clients"] });
       void qc.invalidateQueries({ queryKey: ["clients", id] });
-      const base = import.meta.env.VITE_API_BASE_URL ?? "";
-      const res = await fetch(`${base}/api/v1/invoices/${inv.id}/gst-invoice`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
+    },
+  });
+
+  const showQr = useMutation({
+    mutationFn: (invoiceId: string) =>
+      apiFetch<UpiQr>(`/api/v1/invoices/${invoiceId}/upi-qr`, { token: getToken() }),
+    onSuccess: (data, invoiceId) => {
+      setQr(data);
+      setQrInvoiceId(invoiceId);
+    },
+  });
+
+  const markUpi = useMutation({
+    mutationFn: async (invoiceId: string) => {
+      const payment = await apiFetch<{ id: string }>("/api/v1/payments/collect", {
+        method: "POST",
+        token: getToken(),
+        body: JSON.stringify({ invoice_id: invoiceId }),
       });
-      const htmlDoc = await res.text();
-      const blob = new Blob([htmlDoc], { type: "text/html" });
-      window.open(URL.createObjectURL(blob), "_blank");
+      await apiFetch("/api/v1/payments/confirm", {
+        method: "POST",
+        token: getToken(),
+        body: JSON.stringify({
+          payment_id: payment.id,
+          provider_payment_id: `pay_${Date.now()}`,
+          method: "upi",
+        }),
+      });
+    },
+    onSuccess: () => {
+      setQr(null);
+      setQrInvoiceId(null);
+      void qc.invalidateQueries({ queryKey: ["payments"] });
+      void qc.invalidateQueries({ queryKey: ["invoices"] });
+      void qc.invalidateQueries({ queryKey: ["invoices", "client", id] });
+      void qc.invalidateQueries({ queryKey: ["clients"] });
+      void qc.invalidateQueries({ queryKey: ["clients", id] });
     },
   });
 
@@ -188,9 +275,7 @@ export function ClientDetailPage() {
             body: photoFile,
           });
         }
-        photoUrls.push(
-          presign.public_url || `https://media.local/${presign.object_key}`,
-        );
+        photoUrls.push(presign.public_url || `https://media.local/${presign.object_key}`);
       }
       return apiFetch("/api/v1/assessments", {
         method: "POST",
@@ -215,6 +300,9 @@ export function ClientDetailPage() {
   if (!client.data) return <p>Client not found.</p>;
 
   const c = client.data;
+  const validityCode = c.pt_validity;
+  const validityLabel = ptValidityLabel(validityCode);
+  const validityDetail = ptValidityDetail(validityCode, c.pt_start_at, c.pt_end_at);
   const cancellable = (history.data ?? []).filter(
     (s) => s.status === "scheduled" || s.status === "checked_in",
   );
@@ -228,17 +316,60 @@ export function ClientDetailPage() {
         <h1 className="mt-2 font-display text-3xl font-bold text-forest dark:text-lime">
           {c.full_name}
         </h1>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Badge>{c.status}</Badge>
-          <Badge>{c.sessions_completed ?? 0} completed</Badge>
-          <Badge className="bg-moss/15 text-moss dark:bg-lime/15 dark:text-lime">
-            {formatMoney(c.amount_paid_paise ?? 0)} paid
-          </Badge>
-        </div>
+        <p className="mt-1 text-sm text-slate dark:text-sand/70">
+          {c.phone || c.email || "No contact"} · Joined {formatDate(c.joined_on ?? c.created_at)}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <SummaryTile
+          label="PT validity"
+          value={validityLabel}
+          hint={validityDetail}
+          accent={validityCode === "active"}
+        />
+        <SummaryTile
+          label="Payments collected"
+          value={formatMoney(c.amount_paid_paise ?? 0)}
+          hint="Paid invoices only"
+        />
+        <SummaryTile
+          label="Sessions done"
+          value={String(c.sessions_completed ?? 0)}
+          hint="Completed PT sessions"
+        />
+        <SummaryTile label="Status" value={c.status} hint={c.goals || "No goals set"} />
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(["overview", "sessions", "assessments", "notes"] as const).map((t) => (
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setTab("overview");
+            setFocusPanel("schedule");
+          }}
+        >
+          Schedule
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setTab("payments");
+            setFocusPanel("invoice");
+          }}
+        >
+          Generate invoice
+        </Button>
+        <Button variant="ghost" onClick={() => setTab("sessions")}>
+          Cancel session
+        </Button>
+        <Link to={`/app/calendar?book=1&client=${c.id}`}>
+          <Button variant="ghost">Book once</Button>
+        </Link>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {(["overview", "payments", "sessions", "assessments", "notes"] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -255,31 +386,12 @@ export function ClientDetailPage() {
       </div>
 
       {tab === "overview" && (
-        <div className="space-y-3 rounded-2xl border border-forest/10 bg-white/70 p-4 dark:border-sand/10 dark:bg-white/5">
-          <p>
-            <span className="text-slate dark:text-sand/60">Joined:</span>{" "}
-            {formatDate(c.joined_on ?? c.created_at)}
-          </p>
-          <p>
-            <span className="text-slate dark:text-sand/60">Amount paid:</span>{" "}
-            {formatMoney(c.amount_paid_paise ?? 0)}
-          </p>
-          <p>
-            <span className="text-slate dark:text-sand/60">Sessions completed:</span>{" "}
-            {c.sessions_completed ?? 0}
-          </p>
-          <p>
-            <span className="text-slate dark:text-sand/60">Phone:</span> {c.phone || "—"}
-          </p>
-          <p>
-            <span className="text-slate dark:text-sand/60">Email:</span> {c.email || "—"}
-          </p>
-          <p>
-            <span className="text-slate dark:text-sand/60">Goals:</span> {c.goals || "—"}
-          </p>
-
-          <div className="space-y-2 border-t border-forest/10 pt-3 dark:border-sand/10">
-            <h2 className="font-display text-lg font-bold">PT period</h2>
+        <div className="space-y-4">
+          <div className="space-y-2 rounded-2xl border border-forest/10 bg-white/70 p-4 dark:border-sand/10 dark:bg-white/5">
+            <h2 className="font-display text-lg font-bold">PT validity</h2>
+            <p className="text-sm text-slate dark:text-sand/70">
+              {validityLabel}: {validityDetail}
+            </p>
             <Label>PT start</Label>
             <Input type="date" value={ptStart} onChange={(e) => setPtStart(e.target.value)} />
             <Label>PT end</Label>
@@ -295,19 +407,18 @@ export function ClientDetailPage() {
                 })
               }
             >
-              Save PT dates
+              Save PT validity
             </Button>
           </div>
 
           <div
-            id="schedule-panel"
-            className={`space-y-2 border-t border-forest/10 pt-3 dark:border-sand/10 ${
-              focusPanel === "schedule" ? "rounded-xl ring-2 ring-moss/40 p-2" : ""
+            className={`space-y-2 rounded-2xl border border-forest/10 bg-white/70 p-4 dark:border-sand/10 dark:bg-white/5 ${
+              focusPanel === "schedule" ? "ring-2 ring-moss/40" : ""
             }`}
           >
             <h2 className="font-display text-lg font-bold">Schedule series</h2>
             <p className="text-xs text-slate dark:text-sand/60">
-              Set frequency (weekday) and session duration, then generate upcoming classes.
+              Frequency (weekday) + duration → generate upcoming classes.
             </p>
             <Label>First session</Label>
             <Input
@@ -322,7 +433,7 @@ export function ClientDetailPage() {
               value={scheduleDuration}
               onChange={(e) => setScheduleDuration(Number(e.target.value))}
             />
-            <Label>Weekday frequency</Label>
+            <Label>Weekday</Label>
             <div className="flex flex-wrap gap-2">
               {days.map((d, i) => (
                 <button
@@ -347,15 +458,21 @@ export function ClientDetailPage() {
               Schedule weekly series
             </Button>
           </div>
+        </div>
+      )}
 
+      {tab === "payments" && (
+        <div className="space-y-4">
           <div
-            id="invoice-panel"
-            className={`space-y-2 border-t border-forest/10 pt-3 dark:border-sand/10 ${
-              focusPanel === "invoice" ? "rounded-xl ring-2 ring-moss/40 p-2" : ""
+            className={`space-y-2 rounded-2xl border border-forest/10 bg-white/70 p-4 dark:border-sand/10 dark:bg-white/5 ${
+              focusPanel === "invoice" ? "ring-2 ring-moss/40" : ""
             }`}
           >
-            <h2 className="font-display text-lg font-bold">Generate invoice</h2>
-            <Label>Amount (INR, before GST)</Label>
+            <h2 className="font-display text-lg font-bold">1. Generate GST invoice</h2>
+            <p className="text-xs text-slate dark:text-sand/60">
+              Creating an invoice does not require collecting payment. You can view/print GST anytime.
+            </p>
+            <Label>Amount before GST (INR)</Label>
             <Input
               type="number"
               value={invoiceAmount}
@@ -363,38 +480,95 @@ export function ClientDetailPage() {
             />
             <Button
               className="w-full"
-              variant="secondary"
-              disabled={createInvoice.isPending}
+              disabled={createInvoice.isPending || invoiceAmount <= 0}
               onClick={() => createInvoice.mutate()}
             >
-              Create GST invoice
+              {createInvoice.isPending ? "Creating…" : "Create GST invoice"}
             </Button>
+            {lastInvoiceId && (
+              <Button
+                className="w-full"
+                variant="outline"
+                onClick={() => void openGstInvoice(lastInvoiceId)}
+              >
+                View / print GST invoice
+              </Button>
+            )}
           </div>
 
-          <Link to={`/app/calendar?book=1&client=${c.id}`}>
-            <Button className="mt-2 w-full">Book single session</Button>
-          </Link>
-          <Button
-            className="w-full"
-            variant="secondary"
-            disabled={invitePortal.isPending}
-            onClick={() => invitePortal.mutate()}
-          >
-            Invite to client portal
-          </Button>
-          {inviteToken && (
-            <p className="break-all rounded-xl bg-sand/50 p-2 text-xs dark:bg-white/10">
-              Invite token: {inviteToken}
-            </p>
+          {qr && (
+            <div className="space-y-2 rounded-2xl border border-moss/30 bg-moss/5 p-4 dark:border-lime/30">
+              <h2 className="font-display text-lg font-bold">UPI QR · {qr.invoice_number}</h2>
+              <p className="text-sm text-slate dark:text-sand/70">
+                {formatMoney(qr.amount_paise)} → {qr.upi_vpa}
+              </p>
+              <img
+                src={qr.qr_image_url}
+                alt="UPI QR"
+                className="mx-auto h-52 w-52 rounded-xl bg-white p-2"
+              />
+              {qrInvoiceId && (
+                <Button
+                  className="w-full"
+                  disabled={markUpi.isPending}
+                  onClick={() => markUpi.mutate(qrInvoiceId)}
+                >
+                  Mark UPI received
+                </Button>
+              )}
+            </div>
           )}
-          <Button className="w-full" variant="outline" onClick={() => openChat.mutate()}>
-            Open chat thread
-          </Button>
-          <Link to="/app/chat">
-            <Button className="w-full" variant="ghost">
-              Go to chat
-            </Button>
-          </Link>
+
+          <div className="space-y-2">
+            <h2 className="font-display text-lg font-bold">Invoices for this client</h2>
+            <p className="text-xs text-slate dark:text-sand/60">
+              GST invoice is always available. Collect cash/QR only when you want to mark payment.
+            </p>
+            {clientInvoices.length === 0 && (
+              <p className="text-sm text-slate dark:text-sand/60">No invoices yet.</p>
+            )}
+            <ul className="space-y-2">
+              {clientInvoices.map((inv) => (
+                <li
+                  key={inv.id}
+                  className="space-y-2 rounded-2xl border border-forest/10 bg-white/70 px-4 py-3 dark:border-sand/10 dark:bg-white/5"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="font-semibold">{inv.invoice_number}</p>
+                      <p className="text-sm text-slate dark:text-sand/60">
+                        {formatMoney(inv.total_paise)}
+                        {inv.tax_paise ? ` · tax ${formatMoney(inv.tax_paise)}` : ""}
+                      </p>
+                    </div>
+                    <Badge>{inv.status}</Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" onClick={() => void openGstInvoice(inv.id)}>
+                      View GST invoice
+                    </Button>
+                    {inv.status !== "paid" && (
+                      <>
+                        <Button
+                          variant="secondary"
+                          disabled={showQr.isPending}
+                          onClick={() => showQr.mutate(inv.id)}
+                        >
+                          Show QR
+                        </Button>
+                        <Button
+                          disabled={collectCash.isPending}
+                          onClick={() => collectCash.mutate(inv.id)}
+                        >
+                          Cash received
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       )}
 
@@ -404,7 +578,7 @@ export function ClientDetailPage() {
             <div className="rounded-2xl border border-dashed border-forest/20 p-3 dark:border-sand/20">
               <p className="mb-2 text-sm font-semibold">Cancel upcoming</p>
               <ul className="space-y-2">
-                {cancellable.slice(0, 5).map((s) => (
+                {cancellable.slice(0, 8).map((s) => (
                   <li key={s.id} className="flex items-center justify-between gap-2 text-sm">
                     <span>
                       {new Date(s.starts_at).toLocaleString([], {
@@ -529,5 +703,33 @@ export function ClientDetailPage() {
         </div>
       )}
     </section>
+  );
+}
+
+function SummaryTile({
+  label,
+  value,
+  hint,
+  accent,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border p-3 ${
+        accent
+          ? "border-moss/30 bg-moss/10 dark:border-lime/30 dark:bg-lime/10"
+          : "border-forest/10 bg-white/70 dark:border-sand/10 dark:bg-white/5"
+      }`}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate dark:text-sand/60">
+        {label}
+      </p>
+      <p className="mt-1 font-display text-lg font-bold text-forest dark:text-lime">{value}</p>
+      <p className="mt-0.5 text-[11px] text-slate dark:text-sand/60">{hint}</p>
+    </div>
   );
 }

@@ -151,7 +151,10 @@ export function PaymentsPage() {
       </div>
 
       <div className="space-y-3 rounded-2xl border border-forest/10 bg-white/70 p-4 dark:border-sand/10 dark:bg-white/5">
-        <h2 className="font-display text-xl font-bold">Create invoice</h2>
+        <h2 className="font-display text-xl font-bold">1. Create GST invoice</h2>
+        <p className="text-xs text-slate dark:text-sand/60">
+          Invoice creation is independent of payment. Collect cash/QR later if needed.
+        </p>
         <Label>Client</Label>
         <select
           className="min-h-11 w-full rounded-xl border border-forest/15 bg-white px-3 text-sm dark:bg-white/5"
@@ -202,7 +205,10 @@ export function PaymentsPage() {
         </div>
       )}
 
-      <h2 className="font-display text-xl font-bold">Invoices</h2>
+      <h2 className="font-display text-xl font-bold">2. Invoices</h2>
+      <p className="text-xs text-slate dark:text-sand/60 -mt-2">
+        View GST anytime. Cash/QR collect is optional and separate.
+      </p>
       <ul className="space-y-2">
         {(invoices.data ?? []).map((inv) => (
           <li
@@ -221,7 +227,7 @@ export function PaymentsPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={() => void openGstInvoice(inv.id)}>
-                GST invoice
+                View GST invoice
               </Button>
               {inv.status !== "paid" && (
                 <>

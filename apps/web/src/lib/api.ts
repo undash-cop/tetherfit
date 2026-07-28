@@ -113,6 +113,7 @@ export type Client = {
   created_at: string;
   updated_at: string;
   joined_on?: string | null;
+  pt_validity?: string;
   sessions_completed?: number;
   amount_paid_paise?: number;
 };

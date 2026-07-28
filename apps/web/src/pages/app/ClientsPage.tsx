@@ -95,7 +95,7 @@ export function ClientsPage() {
               </Link>
               <Link to={`/app/clients/${client.id}?action=invoice`}>
                 <Button size="default" variant="outline">
-                  Invoice
+                  Generate invoice
                 </Button>
               </Link>
               <Link to={`/app/clients/${client.id}?tab=sessions`}>

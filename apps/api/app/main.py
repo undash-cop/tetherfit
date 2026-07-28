@@ -22,7 +22,6 @@ from app.features.enterprise.api import router as enterprise_router
 from app.features.marketplace.api import router as marketplace_router
 from app.features.media.api import router as media_router
 from app.features.nutrition.api import router as nutrition_router
-from app.features.packages.api import router as packages_router
 from app.features.portal.api import router as portal_router
 from app.features.realtime.api import router as realtime_router
 from app.features.reports.api import router as reports_router
@@ -88,7 +87,6 @@ def create_app() -> FastAPI:
     app.include_router(metrics_router)
     app.include_router(users_router)
     app.include_router(clients_router)
-    app.include_router(packages_router)
     app.include_router(sessions_router)
     app.include_router(dashboard_router)
     app.include_router(workouts_router)

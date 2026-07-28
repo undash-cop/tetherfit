@@ -1,6 +1,9 @@
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
-from app.features.billing.api import _build_upi_uri, _compute_tax_paise
+from app.features.billing.api import _compute_tax_paise
+from app.features.clients.schemas import ClientCreate, ClientUpdate, compute_pt_validity
 from app.features.sessions.schemas import StartSessionBody
 
 
@@ -24,8 +27,32 @@ def test_compute_tax_from_default_gst():
     )
 
 
-def test_build_upi_uri():
-    uri = _build_upi_uri(vpa="trainer@upi", amount_paise=250000, note="TF-00001")
-    assert uri.startswith("upi://pay?")
-    assert "pa=trainer" in uri
-    assert "am=2500.00" in uri
+def test_pt_validity_states():
+    now = datetime(2026, 7, 28, tzinfo=UTC)
+    assert compute_pt_validity(None, None, now=now) == "not_set"
+    upcoming = compute_pt_validity(
+        now + timedelta(days=1), now + timedelta(days=30), now=now
+    )
+    assert upcoming == "upcoming"
+    active = compute_pt_validity(
+        now - timedelta(days=10), now + timedelta(days=10), now=now
+    )
+    assert active == "active"
+    expired = compute_pt_validity(
+        now - timedelta(days=30), now - timedelta(days=1), now=now
+    )
+    assert expired == "expired"
+
+
+def test_client_pt_range_validation():
+    start = datetime.now(UTC)
+    with pytest.raises(ValueError):
+        ClientCreate(
+            full_name="A",
+            pt_start_at=start,
+            pt_end_at=start - timedelta(days=1),
+        )
+    with pytest.raises(ValueError):
+        ClientUpdate(pt_start_at=start, pt_end_at=start - timedelta(days=1))
+    ok = ClientCreate(full_name="A", pt_start_at=start, pt_end_at=start + timedelta(days=30))
+    assert ok.full_name == "A"

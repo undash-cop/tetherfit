@@ -1,7 +1,24 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+def compute_pt_validity(
+    pt_start_at: datetime | None,
+    pt_end_at: datetime | None,
+    *,
+    now: datetime | None = None,
+) -> str:
+    """Return not_set | upcoming | active | expired."""
+    if pt_start_at is None and pt_end_at is None:
+        return "not_set"
+    current = now or datetime.now(UTC)
+    if pt_start_at is not None and current < pt_start_at:
+        return "upcoming"
+    if pt_end_at is not None and current > pt_end_at:
+        return "expired"
+    return "active"
 
 
 class ClientCreate(BaseModel):
@@ -19,6 +36,16 @@ class ClientCreate(BaseModel):
     pt_start_at: datetime | None = None
     pt_end_at: datetime | None = None
 
+    @model_validator(mode="after")
+    def validate_pt_range(self) -> "ClientCreate":
+        if (
+            self.pt_start_at is not None
+            and self.pt_end_at is not None
+            and self.pt_end_at < self.pt_start_at
+        ):
+            raise ValueError("pt_end_at must be on or after pt_start_at")
+        return self
+
 
 class ClientUpdate(BaseModel):
     full_name: str | None = Field(default=None, min_length=1, max_length=255)
@@ -34,6 +61,16 @@ class ClientUpdate(BaseModel):
     notes: str | None = None
     pt_start_at: datetime | None = None
     pt_end_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_pt_range(self) -> "ClientUpdate":
+        if (
+            self.pt_start_at is not None
+            and self.pt_end_at is not None
+            and self.pt_end_at < self.pt_start_at
+        ):
+            raise ValueError("pt_end_at must be on or after pt_start_at")
+        return self
 
 
 class ClientOut(BaseModel):
@@ -58,5 +95,6 @@ class ClientOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     joined_on: datetime | None = None
+    pt_validity: str = "not_set"
     sessions_completed: int = 0
     amount_paid_paise: int = 0

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.domain.models import Client, PtSession
-from app.features.clients.schemas import ClientOut
+from app.features.clients.schemas import ClientOut, compute_pt_validity
 from app.features.dashboard.schemas import DashboardOut
 from app.features.sessions.schemas import SessionOut
 
@@ -64,6 +64,7 @@ class DashboardService:
         for client in clients_result.scalars().all():
             out = ClientOut.model_validate(client)
             out.joined_on = client.created_at
+            out.pt_validity = compute_pt_validity(client.pt_start_at, client.pt_end_at)
             recent_clients.append(out)
 
         return DashboardOut(

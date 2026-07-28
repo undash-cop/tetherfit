@@ -130,15 +130,18 @@ def _build_upi_uri(*, vpa: str, amount_paise: int, note: str) -> str:
 
 @router.get("/invoices", response_model=list[InvoiceOut])
 async def list_invoices(
+    client_id: UUID | None = None,
     principal: AuthPrincipal = Depends(require_permission("invoice:view")),
     _: AuthPrincipal = Depends(require_organization),
     db: AsyncSession = Depends(get_db),
 ) -> list[InvoiceOut]:
-    result = await db.execute(
-        select(Invoice)
-        .where(Invoice.organization_id == org_id(principal), Invoice.deleted_at.is_(None))
-        .order_by(Invoice.created_at.desc())
-    )
+    filters = [
+        Invoice.organization_id == org_id(principal),
+        Invoice.deleted_at.is_(None),
+    ]
+    if client_id is not None:
+        filters.append(Invoice.client_id == client_id)
+    result = await db.execute(select(Invoice).where(*filters).order_by(Invoice.created_at.desc()))
     return [InvoiceOut.model_validate(i) for i in result.scalars().all()]
 
 
@@ -244,6 +247,7 @@ async def gst_invoice_html(
     _: AuthPrincipal = Depends(require_organization),
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
+    """Printable GST tax invoice. Available for any invoice status (not payment-gated)."""
     oid = org_id(principal)
     invoice = await db.scalar(
         select(Invoice).where(
