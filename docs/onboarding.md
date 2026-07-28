@@ -60,4 +60,4 @@ Authenticated calendar e2e is local-only: log in, then exercise day/week drag-dr
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-Compose starts **api** only (optional `--profile worker`). Frontend: `npm run dev` or Netlify.
+Compose starts **api + worker + beat**. Frontend: `npm run dev` or Netlify.

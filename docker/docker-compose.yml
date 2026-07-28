@@ -1,5 +1,5 @@
 # Local / laptop only — API container.
-# Production: udc-infra (VPS) + Netlify (frontend). Do not deploy this web image to the VPS.
+# Production deployment follows udc-infra (`deploy-apps.sh`) for API, and Netlify for web.
 
 services:
   api:
@@ -9,7 +9,7 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - ../.env
+      - ../.env.example
     environment:
       API_HOST: 0.0.0.0
       API_PORT: 8000
@@ -22,15 +22,23 @@ services:
       retries: 3
       start_period: 40s
 
-  # Optional local Celery (needs Redis + DATABASE_URL)
   worker:
-    profiles: ["worker"]
     build:
       context: ..
       dockerfile: Dockerfile
-    command: ["worker"]
+    command: ["celery", "-A", "app.infrastructure.celery_app.celery_app", "worker", "-l", "info"]
     env_file:
-      - ../.env
+      - ../.env.example
+    depends_on:
+      - api
+
+  beat:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.infrastructure.celery_app.celery_app", "beat", "-l", "info"]
+    env_file:
+      - ../.env.example
     depends_on:
       - api
 
@@ -39,4 +47,4 @@ services:
 # - Redis       → REDIS_URL / CELERY_*
 # - Keycloak    → KEYCLOAK_* / UDC_JWT_ISSUER
 # - Cloudflare R2 → R2_*
-# Frontend → Netlify (or npm run dev locally)
+# Frontend → Netlify (or `cd apps/web && npm run dev` locally)

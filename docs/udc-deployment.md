@@ -9,7 +9,7 @@ TetherFit API on the shared **UDC** stack (`udc-infra`, `deploy-apps.sh`). Front
 | Host | `https://api.tetherfit.undash-cop.com` |
 | Clone path | `/opt/udc/repos/tetherfit` |
 | Deploy | `./scripts/deploy-apps.sh --only tetherfit` |
-| Worker | `udc-tetherfit-worker` (Celery + beat) |
+| Worker/Beat | `docker compose -f docker/docker-compose.apps.phase.yml up -d tetherfit-worker tetherfit-beat` |
 
 ## First-time checklist
 
@@ -17,8 +17,7 @@ TetherFit API on the shared **UDC** stack (`udc-infra`, `deploy-apps.sh`). Front
 2. On VPS: ensure `tetherfit` DB exists (`04-tetherfit-db.sh` only runs on fresh Postgres volume — otherwise `CREATE DATABASE tetherfit`).
 3. `./scripts/init-env.sh` → fill `configs/env/apps.tetherfit.env`.
 4. DNS A/AAAA for `api.tetherfit.undash-cop.com` → VPS; issue TLS; deploy.
-5. Start worker after API image is built.
-6. Point Netlify `VITE_API_URL` at the public API host; set `CORS_ORIGINS` accordingly.
+5. Point Netlify `VITE_API_URL` at the public API host; set `CORS_ORIGINS` accordingly.
 
 ## Health failed after deploy
 
@@ -29,7 +28,7 @@ docker exec udc-tetherfit curl -fsS http://127.0.0.1:8000/health
 docker exec udc-tetherfit curl -fsS http://keycloak:8080/realms/undash/protocol/openid-connect/certs | head
 ```
 
-Common causes: wrong `DATABASE_URL`, missing `UDC_JWT_ISSUER` vs public token `iss`, Redis password mismatch, CORS blocking Netlify.
+Common causes: wrong `DATABASE_URL`, missing `UDC_JWT_ISSUER` vs public token `iss`, CORS blocking Netlify.
 
 ## Related
 

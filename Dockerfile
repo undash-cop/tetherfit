@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1
-# UDC contract: repo-root Dockerfile → API only (frontend is Netlify).
-# Build context = monorepo root.
+# UDC contract: repo-root Dockerfile, API on :8000.
 
 FROM python:3.13-slim
 
@@ -21,13 +20,8 @@ COPY apps/api/pyproject.toml apps/api/README.md ./
 COPY apps/api/app ./app
 COPY apps/api/alembic ./alembic
 COPY apps/api/alembic.ini ./
-COPY docker/api-entrypoint.sh /app/docker-entrypoint.sh
 
-RUN pip install --upgrade pip && \
-    pip install -e . && \
-    chmod +x /app/docker-entrypoint.sh
+RUN pip install --upgrade pip && pip install -e .
 
 EXPOSE 8000
-
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["api"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
