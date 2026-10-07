@@ -62,5 +62,5 @@ def create_presigned_put(
             ExpiresIn=expires_in,
         )
         return url, {"Content-Type": content_type}
-    except (ClientError, BotoCoreError):
+    except ClientError, BotoCoreError:
         return None, {}

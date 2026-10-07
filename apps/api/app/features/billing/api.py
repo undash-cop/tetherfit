@@ -262,8 +262,8 @@ async def invoice_upi_qr(
         amount_paise=invoice.total_paise,
         note=f"{invoice.invoice_number} TetherFit",
     )
-    qr_image_url = (
-        "https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=" + quote(upi_uri, safe="")
+    qr_image_url = "https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=" + quote(
+        upi_uri, safe=""
     )
     return UpiQrOut(
         invoice_id=invoice.id,
@@ -315,22 +315,20 @@ async def gst_invoice_html(
         line_meta = first.get("meta") or {}
     tax_inclusive = bool(line_meta.get("tax_inclusive"))
     pt_duration = str(line_meta.get("pt_duration") or "").strip()
-    terms = [str(t).strip() for t in (line_meta.get("terms_and_conditions") or []) if str(t).strip()]
+    terms = [
+        str(t).strip() for t in (line_meta.get("terms_and_conditions") or []) if str(t).strip()
+    ]
     cgst = invoice.tax_paise // 2
     sgst = invoice.tax_paise - cgst
     org_name = html.escape(org.name if org else "TetherFit")
     inv_num = html.escape(invoice.invoice_number)
     created = invoice.created_at.strftime("%d %b %Y")
     gstin_line = f"GSTIN: {html.escape(org.gstin)}<br/>" if org and org.gstin else ""
-    addr_line = (
-        f"{html.escape(org.business_address)}<br/>" if org and org.business_address else ""
-    )
+    addr_line = f"{html.escape(org.business_address)}<br/>" if org and org.business_address else ""
     phone_line = html.escape(org.business_phone) if org and org.business_phone else ""
     client_name = html.escape(client.full_name if client else "Client")
     client_phone = html.escape(client.phone or "") if client else ""
-    client_email = (
-        f"<br/>{html.escape(client.email)}" if client and client.email else ""
-    )
+    client_email = f"<br/>{html.escape(client.email)}" if client and client.email else ""
     pt_duration_html = (
         f"<p><strong>PT Duration:</strong> {html.escape(pt_duration)}</p>" if pt_duration else ""
     )

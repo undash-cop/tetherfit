@@ -27,8 +27,8 @@ class Organization(UUIDPrimaryKeyMixin, TimestampMixin, AuditMixin, Base):
     working_hours: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     feature_flags: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
-    users: Mapped[list["User"]] = relationship(back_populates="organization")
-    clients: Mapped[list["Client"]] = relationship(back_populates="organization")
+    users: Mapped[list[User]] = relationship(back_populates="organization")
+    clients: Mapped[list[Client]] = relationship(back_populates="organization")
 
 
 class User(UUIDPrimaryKeyMixin, TimestampMixin, AuditMixin, Base):
@@ -99,8 +99,8 @@ class Client(UUIDPrimaryKeyMixin, TimestampMixin, AuditMixin, Base):
     )
 
     organization: Mapped[Organization] = relationship(back_populates="clients")
-    packages: Mapped[list["SessionPackage"]] = relationship(back_populates="client")
-    sessions: Mapped[list["PtSession"]] = relationship(back_populates="client")
+    packages: Mapped[list[SessionPackage]] = relationship(back_populates="client")
+    sessions: Mapped[list[PtSession]] = relationship(back_populates="client")
 
 
 class SessionPackage(UUIDPrimaryKeyMixin, TimestampMixin, AuditMixin, Base):

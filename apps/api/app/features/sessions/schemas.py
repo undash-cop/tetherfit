@@ -12,7 +12,7 @@ class SessionCreate(BaseModel):
     notes: str | None = None
 
     @model_validator(mode="after")
-    def validate_range(self) -> "SessionCreate":
+    def validate_range(self) -> SessionCreate:
         if self.ends_at <= self.starts_at:
             raise ValueError("ends_at must be after starts_at")
         return self

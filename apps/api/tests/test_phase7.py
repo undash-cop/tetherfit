@@ -36,17 +36,11 @@ def test_split_inclusive_tax_from_gross_amount():
 def test_pt_validity_states():
     now = datetime(2026, 7, 28, tzinfo=UTC)
     assert compute_pt_validity(None, None, now=now) == "not_set"
-    upcoming = compute_pt_validity(
-        now + timedelta(days=1), now + timedelta(days=30), now=now
-    )
+    upcoming = compute_pt_validity(now + timedelta(days=1), now + timedelta(days=30), now=now)
     assert upcoming == "upcoming"
-    active = compute_pt_validity(
-        now - timedelta(days=10), now + timedelta(days=10), now=now
-    )
+    active = compute_pt_validity(now - timedelta(days=10), now + timedelta(days=10), now=now)
     assert active == "active"
-    expired = compute_pt_validity(
-        now - timedelta(days=30), now - timedelta(days=1), now=now
-    )
+    expired = compute_pt_validity(now - timedelta(days=30), now - timedelta(days=1), now=now)
     assert expired == "expired"
 
 

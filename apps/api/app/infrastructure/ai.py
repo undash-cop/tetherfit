@@ -136,7 +136,7 @@ class OpenAiCompatibleProvider(AiProvider):
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
                 data = json.loads(resp.read().decode())
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+        except urllib.error.URLError, TimeoutError, json.JSONDecodeError:
             return NoopAiProvider().complete(system, user, model=use_model)
 
         text = (

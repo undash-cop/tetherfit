@@ -2,7 +2,7 @@
 # UDC contract: repo-root Dockerfile, API on :8000.
 # Entrypoint waits for Postgres and runs alembic before uvicorn (hiring-journey pattern).
 
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

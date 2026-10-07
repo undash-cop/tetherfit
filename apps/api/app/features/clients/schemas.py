@@ -37,7 +37,7 @@ class ClientCreate(BaseModel):
     pt_end_at: datetime | None = None
 
     @model_validator(mode="after")
-    def validate_pt_range(self) -> "ClientCreate":
+    def validate_pt_range(self) -> ClientCreate:
         if (
             self.pt_start_at is not None
             and self.pt_end_at is not None
@@ -63,7 +63,7 @@ class ClientUpdate(BaseModel):
     pt_end_at: datetime | None = None
 
     @model_validator(mode="after")
-    def validate_pt_range(self) -> "ClientUpdate":
+    def validate_pt_range(self) -> ClientUpdate:
         if (
             self.pt_start_at is not None
             and self.pt_end_at is not None

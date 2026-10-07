@@ -2,7 +2,7 @@
 
 ## Stack
 
-- Python 3.13+ / FastAPI in `apps/api`
+- Python 3.14+ / FastAPI in `apps/api`
 - Node 22+ / React 19 / Vite 8 in `apps/web`
 - External Postgres, Redis, Keycloak, R2
 
