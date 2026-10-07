@@ -1,31 +1,56 @@
 # syntax=docker/dockerfile:1
 # UDC contract: repo-root Dockerfile, API on :8000.
-# Entrypoint waits for Postgres and runs alembic before uvicorn (hiring-journey pattern).
+# Alpine — cuts Debian slim CVE noise. Entrypoint waits for Postgres + alembic.
 
-FROM python:3.14-slim
+FROM python:3.14.8-alpine AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
-WORKDIR /app
+RUN apk add --no-cache \
+    build-base \
+    postgresql-dev \
+    libffi-dev \
+    linux-headers
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
-    ca-certificates \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
+WORKDIR /build
 COPY apps/api/pyproject.toml apps/api/README.md ./
 COPY apps/api/app ./app
 COPY apps/api/alembic ./alembic
 COPY apps/api/alembic.ini ./
-COPY docker/api-entrypoint.sh /app/docker-entrypoint.sh
 
-RUN pip install --upgrade pip && \
-    pip install -e . && \
-    chmod +x /app/docker-entrypoint.sh
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# psycopg[binary] has no musl wheels — install pure/source psycopg.
+RUN pip install --upgrade pip setuptools wheel \
+    && sed -i 's/psycopg\[binary\]/psycopg/g' pyproject.toml \
+    && pip install --no-cache-dir .
+
+FROM python:3.14.8-alpine
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+RUN apk add --no-cache \
+    bash \
+    ca-certificates \
+    curl \
+    libpq \
+    libffi
+
+WORKDIR /app
+COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /build/app ./app
+COPY --from=builder /build/alembic ./alembic
+COPY --from=builder /build/alembic.ini ./
+COPY --from=builder /build/pyproject.toml ./
+COPY docker/api-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 8000
 
