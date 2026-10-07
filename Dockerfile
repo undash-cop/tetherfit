@@ -24,10 +24,11 @@ COPY apps/api/alembic.ini ./
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# psycopg[binary] has no musl wheels — install pure/source psycopg.
+# psycopg[binary] has no musl wheels — build psycopg[c] against libpq.
 RUN pip install --upgrade pip setuptools wheel \
-    && sed -i 's/psycopg\[binary\]/psycopg/g' pyproject.toml \
-    && pip install --no-cache-dir .
+    && sed -i 's/psycopg\[binary\]/psycopg[c]/g' pyproject.toml \
+    && pip install --no-cache-dir . \
+    && python -c "import psycopg; from psycopg import pq; assert pq.__impl__ == 'c', pq.__impl__"
 
 FROM python:3.14.8-alpine
 
