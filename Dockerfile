@@ -40,7 +40,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apk add --no-cache \
     bash \
     ca-certificates \
-    curl \
+    'curl>=8.23.0-r0' \
+    'libcurl>=8.23.0-r0' \
     libpq \
     libffi
 
