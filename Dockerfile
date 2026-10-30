@@ -42,7 +42,7 @@ RUN apk add --no-cache \
     ca-certificates \
     'curl>=8.23.0-r0' \
     'libcurl>=8.23.0-r0' \
-    'brotli-libs>=1.2.1-r0' \
+    'brotli-libs>=1.1.1-r0' \
     libpq \
     libffi
 
