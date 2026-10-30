@@ -19,6 +19,7 @@ dependencies = [
   "httpx==0.28.1",
   "python-multipart==0.0.32",
   "email-validator==2.3.0",
+  "dnspython>=2.9.0",  # CVE-2026-114605 (transitive via email-validator)
   "psycopg[binary]==3.3.6",
 ]
 
